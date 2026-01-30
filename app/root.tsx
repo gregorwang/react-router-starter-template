@@ -8,6 +8,9 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { ChatProvider } from "./contexts/ChatContext";
+import { SettingsProvider } from "./contexts/SettingsContext";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -42,7 +45,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-	return <Outlet />;
+	return (
+		<SettingsProvider>
+			<ThemeProvider>
+				<ChatProvider>
+					<Outlet />
+				</ChatProvider>
+			</ThemeProvider>
+		</SettingsProvider>
+	);
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
