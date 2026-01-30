@@ -1,27 +1,22 @@
 import { Link, useLocation } from "react-router";
 import { Button } from "../shared/Button";
 import { SidebarItem } from "./SidebarItem";
-import { useConversations } from "../../hooks/useConversations";
 import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils/cn";
+import type { Conversation } from "../../lib/llm/types";
 
 interface SidebarProps {
 	className?: string;
 	onNewChat?: () => void;
+	conversations?: Conversation[];
 }
 
-export function Sidebar({ className, onNewChat }: SidebarProps) {
+export function Sidebar({ className, onNewChat, conversations = [] }: SidebarProps) {
 	const location = useLocation();
-	const { conversations, refresh, deleteConversation } = useConversations();
 	const { theme, toggleTheme } = useTheme();
 
 	const isActive = (path: string) => {
 		return location.pathname === path;
-	};
-
-	const handleDelete = (id: string) => {
-		deleteConversation(id);
-		refresh();
 	};
 
 	return (
@@ -49,7 +44,6 @@ export function Sidebar({ className, onNewChat }: SidebarProps) {
 								<SidebarItem
 									conversation={conv}
 									active={isActive(`/c/${conv.id}`)}
-									onDelete={() => handleDelete(conv.id)}
 								/>
 							</li>
 						))}

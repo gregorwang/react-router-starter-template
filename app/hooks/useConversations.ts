@@ -5,19 +5,23 @@ import {
 	getConversation,
 	deleteConversation as deleteConv,
 	setActiveConversation,
+	getActiveConversationId,
 } from "../lib/storage/conversation-store";
 
 export function useConversations() {
-	const [conversations, setConversations] = useState<Conversation[]>([]);
-	const [activeId, setActiveId] = useState<string | null>(null);
-
-	useEffect(() => {
+	const [conversations, setConversations] = useState<Conversation[]>(() => {
+		// Initialize from localStorage on client
 		if (typeof window === "undefined") {
-			return;
+			return [];
 		}
-		setConversations(getConversations());
-		setActiveId(getActiveConversationId());
-	}, []);
+		return getConversations();
+	});
+	const [activeId, setActiveId] = useState<string | null>(() => {
+		if (typeof window === "undefined") {
+			return null;
+		}
+		return getActiveConversationId();
+	});
 
 	const refresh = useCallback(() => {
 		if (typeof window === "undefined") {

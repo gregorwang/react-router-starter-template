@@ -1,14 +1,16 @@
-import { useEffect } from "react";
-import { useConversations } from "../hooks/useConversations";
+import type { Route } from "./+types/conversations";
 import { Link } from "react-router";
 import { format } from "date-fns";
+import { getConversations } from "../lib/db/conversations.server";
 
-export default function Conversations() {
-	const { conversations, refresh } = useConversations();
+// Server loader - runs in Cloudflare Worker with D1 database
+export async function loader({ context }: Route.LoaderArgs) {
+	const conversations = await getConversations(context.db);
+	return { conversations };
+}
 
-	useEffect(() => {
-		refresh();
-	}, [refresh]);
+export default function Conversations({ loaderData }: Route.ComponentProps) {
+	const { conversations } = loaderData;
 
 	return (
 		<div className="max-w-4xl mx-auto py-8 px-4">
@@ -16,9 +18,17 @@ export default function Conversations() {
 				All Conversations
 			</h1>
 			{conversations.length === 0 ? (
-				<p className="text-gray-500 dark:text-gray-400">
-					No conversations yet. Start a new chat to begin.
-				</p>
+				<div className="text-center py-8">
+					<p className="text-gray-500 dark:text-gray-400 mb-4">
+						No conversations yet. Start a new chat to begin.
+					</p>
+					<Link
+						to="/c/new"
+						className="inline-block px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+					>
+						Start New Chat
+					</Link>
+				</div>
 			) : (
 				<div className="space-y-4">
 					{conversations.map((conv) => (

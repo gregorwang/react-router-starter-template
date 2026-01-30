@@ -10,5 +10,12 @@
 	"upload_source_maps": true,
 	"vars": {
 		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "d1database",
+			"database_id": "d71d0cff-0de4-406f-b1a2-c74e095878e7"
+		}
+	]
 }

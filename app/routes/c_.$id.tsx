@@ -1,43 +1,64 @@
 import type { Route } from "./+types/c.$id";
 import { ChatContainer } from "../components/chat/ChatContainer";
 import { Sidebar } from "../components/layout/Sidebar";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { useChat } from "../hooks/useChat";
-import { useConversations } from "../hooks/useConversations";
-import { createConversation, setActiveConversation } from "../lib/storage/conversation-store";
+import { useChat } from "../contexts/ChatContext";
+import {
+	getConversation,
+	getConversations,
+	saveConversation,
+} from "../lib/db/conversations.server";
+import type { Conversation } from "../lib/llm/types";
 
-export default function Conversation({ params }: Route.ComponentProps) {
+// Server loader - runs in Cloudflare Worker with D1 database
+export async function loader({ context, params }: Route.LoaderArgs) {
+	const conversationId = params.id;
+	const conversations = await getConversations(context.db);
+	let conversation = await getConversation(context.db, conversationId);
+
+	// If conversation doesn't exist, create a new one
+	if (!conversation) {
+		conversation = {
+			id: conversationId,
+			title: "New Chat",
+			provider: "openai",
+			model: "gpt-4o",
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			messages: [],
+		};
+		await saveConversation(context.db, conversation);
+	}
+
+	return {
+		conversationId,
+		conversations,
+		conversation,
+	};
+}
+
+export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const navigate = useNavigate();
 	const { loadConversation } = useChat();
-	const { conversations } = useConversations();
-	const conversationId = params.id;
+	const { conversationId, conversation, conversations } = loaderData;
 
-	const handleNewChat = () => {
-		const newConv = createConversation("New Chat", "openai", "gpt-4o");
-		setActiveConversation(newConv.id);
-		saveConversation(newConv);
-		navigate(`/c/${newConv.id}`);
-	};
-
+	// Load conversation into context when component mounts
 	useEffect(() => {
-		if (typeof window === "undefined") {
-			return;
-		}
-
-		// Load the conversation
-		const conv = conversations.find((c) => c.id === conversationId);
-		if (conv) {
+		if (conversation) {
 			loadConversation(conversationId);
-		} else {
-			// Navigate to a new conversation
-			handleNewChat();
 		}
-	}, [conversationId, conversations, loadConversation, handleNewChat]);
+	}, [conversation, conversationId, loadConversation]);
+
+	const handleNewChat = useCallback(() => {
+		// Generate new UUID and navigate
+		const newId = crypto.randomUUID();
+		navigate(`/c/${newId}`);
+	}, [navigate]);
 
 	return (
 		<div className="flex h-screen">
-			<Sidebar onNewChat={handleNewChat} />
+			<Sidebar onNewChat={handleNewChat} conversations={conversations} />
 			<ChatContainer />
 		</div>
 	);

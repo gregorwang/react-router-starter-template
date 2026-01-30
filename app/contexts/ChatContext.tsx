@@ -5,6 +5,8 @@ import {
 	getConversation,
 	saveConversation,
 	setActiveConversation,
+	getConversations,
+	deleteConversation as deleteStoredConversation,
 } from "../lib/storage/conversation-store";
 
 interface ChatContextValue {
@@ -41,8 +43,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		if (typeof window === "undefined") {
 			return;
 		}
-		const all = [];
-		// We'll rely on the individual components to fetch conversations
+		const all = getConversations();
 		setConversations(all);
 	}, []);
 
@@ -113,9 +114,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		}
 
 		// Delete from localStorage
-		const all = [];
-		const filtered = all.filter((c) => c.id !== id);
-		setConversations(filtered);
+		deleteStoredConversation(id);
+		const all = getConversations();
+		setConversations(all);
 
 		refreshConversations();
 	}, [currentConversation, refreshConversations]);
