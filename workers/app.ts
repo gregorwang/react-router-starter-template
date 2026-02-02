@@ -1,4 +1,5 @@
 import { createRequestHandler } from "react-router";
+import { initDatabase } from "../app/lib/db/conversations.server";
 
 declare module "react-router" {
 	export interface AppLoadContext {
@@ -15,10 +16,18 @@ const requestHandler = createRequestHandler(
 	import.meta.env.MODE,
 );
 
+let dbInitPromise: Promise<void> | null = null;
+
+async function ensureDatabase(env: Env) {
+	if (!dbInitPromise) {
+		dbInitPromise = initDatabase(env.DB);
+	}
+	return dbInitPromise;
+}
+
 export default {
 	async fetch(request, env, ctx) {
-		// Database initialization is now handled via wrangler CLI migrations
-		// Run: wrangler d1 execute DB --file=./app/lib/db/schema.sql
+		await ensureDatabase(env);
 		return requestHandler(request, {
 			cloudflare: { env, ctx },
 			db: env.DB,
