@@ -10,9 +10,22 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+	"ai": {
+		"binding": "AI"
+	},
 	"vars": {
 		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
 	},
+	"ratelimits": [
+		{
+			"name": "CHAT_RATE_LIMITER",
+			"namespace_id": "1001",
+			"simple": {
+				"limit": 20,
+				"period": 60
+			}
+		}
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -24,6 +37,28 @@
 		{
 			"binding": "SETTINGS_KV",
 			"id": "37122faa1e904d958cd4b08e1aad83b2"
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "llm-platform-archive-20260202",
+			"binding": "CHAT_ARCHIVE"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "CHAT_RATE_LIMITER_DO",
+				"class_name": "ChatRateLimiter"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"ChatRateLimiter"
+			]
 		}
 	]
 }

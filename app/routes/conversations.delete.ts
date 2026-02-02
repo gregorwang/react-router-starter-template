@@ -9,6 +9,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
     const formData = await request.formData();
     const conversationId = formData.get("conversationId") as string;
+    const projectId = formData.get("projectId") as string | null;
 
     if (!conversationId) {
         return new Response("Conversation ID is required", { status: 400 });
@@ -18,5 +19,5 @@ export async function action({ request, context }: Route.ActionArgs) {
 
     // Redirect to new chat if we deleted the current one, or just back to conversations
     // We'll let the client handle navigation if needed, but for now redirect to home/new
-    return redirect("/c/new");
+    return redirect(projectId ? `/c/new?project=${projectId}` : "/c/new");
 }

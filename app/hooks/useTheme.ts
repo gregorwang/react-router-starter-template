@@ -1,5 +1,5 @@
 import { useTheme as useThemeContext } from "../contexts/ThemeContext";
 
-export function useTheme() {
+export function useTheme(): ReturnType<typeof useThemeContext> {
 	return useThemeContext();
 }

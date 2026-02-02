@@ -13,11 +13,14 @@ export function SidebarItem({
 }: SidebarItemProps) {
 	const fetcher = useFetcher();
 	const isDeleting = fetcher.state !== "idle";
+	const projectParam = conversation.projectId
+		? `?project=${conversation.projectId}`
+		: "";
 
 	return (
 		<div className="group relative flex items-center">
 			<Link
-				to={`/c/${conversation.id}`}
+				to={`/c/${conversation.id}${projectParam}`}
 				className={cn(
 					"flex-1 flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors pr-8",
 					active
@@ -33,13 +36,18 @@ export function SidebarItem({
 				className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity"
 			>
 				<input type="hidden" name="conversationId" value={conversation.id} />
+				<input
+					type="hidden"
+					name="projectId"
+					value={conversation.projectId || ""}
+				/>
 				<button
 					type="submit"
 					disabled={isDeleting}
 					className="p-1 text-gray-400 hover:text-red-500 rounded"
-					title="Delete conversation"
+					title="删除对话"
 					onClick={(e) => {
-						if (!confirm("Are you sure you want to delete this conversation?")) {
+						if (!confirm("确定要删除这条对话吗？")) {
 							e.preventDefault();
 						}
 					}}

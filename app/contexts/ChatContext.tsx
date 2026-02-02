@@ -8,7 +8,7 @@ interface ChatContextValue {
 	setCurrentConversation: (conversation: Conversation | null) => void;
 	loadConversation: (id: string) => void;
 	addMessage: (message: Message) => void;
-	updateLastMessage: (content: string) => void;
+	updateLastMessage: (update: Partial<Message>) => void;
 	setLoading: (loading: boolean) => void;
 	setStreaming: (streaming: boolean) => void;
 	startConversation: () => void;
@@ -43,15 +43,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 		});
 	}, []);
 
-	const updateLastMessage = useCallback((content: string) => {
+	const updateLastMessage = useCallback((update: Partial<Message>) => {
 		setCurrentConversation((prev) => {
 			if (!prev || prev.messages.length === 0) return prev;
+
+			const last = prev.messages[prev.messages.length - 1];
+			const nextMeta = mergeMessageMeta(last.meta, update.meta);
 
 			return {
 				...prev,
 				messages: [
 					...prev.messages.slice(0, -1),
-					{ ...prev.messages[prev.messages.length - 1], content },
+					{ ...last, ...update, meta: nextMeta },
 				],
 				updatedAt: Date.now(),
 			};
@@ -61,10 +64,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 	const startConversation = useCallback(() => {
 		setCurrentConversation({
 			id: crypto.randomUUID(),
-			title: "New Chat",
+			title: "新对话",
 			messages: [],
 			provider: "deepseek",
 			model: "deepseek-chat",
+			projectId: "default",
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 		});
@@ -88,6 +92,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			{children}
 		</ChatContext.Provider>
 	);
+}
+
+function mergeMessageMeta(
+	base?: Message["meta"],
+	next?: Message["meta"],
+): Message["meta"] {
+	if (!base) return next;
+	if (!next) return base;
+
+	return {
+		...base,
+		...next,
+		usage: next.usage ?? base.usage,
+		webSearch: next.webSearch ?? base.webSearch,
+	};
 }
 
 export function useChat(): ChatContextValue {

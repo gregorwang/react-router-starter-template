@@ -26,6 +26,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "1.15.3",
+		"@cloudflare/workers-types": "^4.20260131.0",
 		"@react-router/dev": "7.9.6",
 		"@tailwindcss/vite": "4.1.17",
 		"@types/highlight.js": "^9.12.4",
@@ -43,10 +44,11 @@
 	"scripts": {
 		"build": "react-router build",
 		"cf-typegen": "wrangler types && react-router typegen",
-		"check": "tsc && react-router build && wrangler deploy --dry-run",
-		"deploy": "wrangler deploy",
+		"check": "tsc && react-router build && wrangler deploy --config build/server/wrangler.json --dry-run",
+		"deploy": "react-router build && wrangler deploy --config build/server/wrangler.json",
 		"dev": "react-router dev",
 		"preview": "npm run build && vite preview",
+		"typegen": "react-router typegen",
 		"typecheck": "npm run typegen && tsc -b"
 	},
 	"type": "module"

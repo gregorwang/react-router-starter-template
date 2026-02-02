@@ -48,6 +48,7 @@ export function useChat() {
 				role: "assistant",
 				content: "",
 				timestamp: Date.now(),
+				meta: {},
 			};
 			addMsg(assistantMessage);
 
@@ -91,8 +92,16 @@ export function useChat() {
 				});
 
 				if (!response.ok) {
-					const error = await response.json();
-					throw new Error(error.error || `Server error: ${response.status}`);
+					let message = `Server error: ${response.status}`;
+					try {
+						const errorBody = (await response.json()) as { error?: string };
+						if (errorBody?.error) {
+							message = errorBody.error;
+						}
+					} catch {
+						// Ignore parse errors
+					}
+					throw new Error(message);
 				}
 
 				// Process the SSE stream
@@ -104,6 +113,10 @@ export function useChat() {
 				}
 
 				let fullContent = "";
+				let reasoning = "";
+				const meta: Message["meta"] = {};
+				const startedAt = Date.now();
+				let gotFirstToken = false;
 				let buffer = "";
 
 				while (true) {
@@ -119,18 +132,78 @@ export function useChat() {
 							const data = line.slice(6).trim();
 							if (data === "[DONE]") break;
 
+							let parsed: any;
 							try {
-								const parsed = JSON.parse(data);
-								if (parsed.content) {
-									fullContent += parsed.content;
-									updateMsg(fullContent);
-								}
+								parsed = JSON.parse(data);
 							} catch {
-								// Ignore parse errors
+								continue;
+							}
+
+							if (parsed.type === "delta" && parsed.content) {
+								fullContent += parsed.content;
+								if (!gotFirstToken) {
+									gotFirstToken = true;
+									meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
+								}
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "reasoning" && parsed.content) {
+								reasoning += parsed.content;
+								if (!gotFirstToken) {
+									gotFirstToken = true;
+									meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
+								}
+								meta.reasoning = reasoning;
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "usage" && parsed.usage) {
+								meta.usage = parsed.usage;
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "credits" && parsed.credits) {
+								meta.credits = parsed.credits;
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "meta" && parsed.meta) {
+								if (parsed.meta.thinkingMs) {
+									meta.thinkingMs = parsed.meta.thinkingMs;
+								}
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "search" && parsed.search) {
+								meta.webSearch = parsed.search;
+								updateMsg({ content: fullContent, meta: { ...meta } });
+							}
+
+							if (parsed.type === "error" && parsed.content) {
+								throw new Error(parsed.content);
 							}
 						}
 					}
 				}
+
+				if (!meta.usage) {
+					const estimateTokens = (text: string) =>
+						Math.max(1, Math.ceil(text.length / 4));
+					const promptTokens = messages.reduce(
+						(total, msg) => total + estimateTokens(msg.content),
+						0,
+					);
+					const completionTokens = estimateTokens(fullContent);
+					meta.usage = {
+						promptTokens,
+						completionTokens,
+						totalTokens: promptTokens + completionTokens,
+						estimated: true,
+					};
+				}
+
+				updateMsg({ content: fullContent, meta: { ...meta } });
 			} catch (error) {
 				if ((error as Error).name === "AbortError") {
 					console.log("Request aborted");
@@ -144,7 +217,14 @@ export function useChat() {
 				abortControllerRef.current = null;
 			}
 		},
-		[currentConversation, startConversation, addMsg, updateMsg, setLoading, setStreaming],
+		[
+			currentConversation,
+			startConversation,
+			addMsg,
+			updateMsg,
+			setLoading,
+			setStreaming,
+		],
 	);
 
 	const abortGeneration = useCallback(() => {

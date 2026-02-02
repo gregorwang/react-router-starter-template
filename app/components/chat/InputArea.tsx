@@ -27,7 +27,11 @@ export function InputArea() {
 			await sendMessage(message);
 		} catch (error) {
 			console.error("Error sending message:", error);
-			alert("Failed to send message. Please check your API key.");
+			const msg =
+				error instanceof Error
+					? error.message
+					: "Failed to send message. Please check your API key.";
+			alert(msg);
 		}
 	};
 
@@ -49,7 +53,7 @@ export function InputArea() {
 				value={input}
 				onChange={(e) => setInput(e.target.value)}
 				onKeyDown={handleKeyDown}
-				placeholder="Type a message..."
+				placeholder="输入消息..."
 				className="w-full pr-12 pl-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none overflow-hidden"
 				rows={1}
 				disabled={isStreaming}

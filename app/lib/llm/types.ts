@@ -1,4 +1,4 @@
-export type LLMProvider = "deepseek" | "xai" | "poe";
+export type LLMProvider = "deepseek" | "xai" | "poe" | "workers-ai";
 
 export interface LLMMessage {
 	role: "user" | "assistant" | "system";
@@ -12,11 +12,7 @@ export interface LLMStreamChunk {
 
 export interface LLMResponse {
 	content: string;
-	usage?: {
-		promptTokens: number;
-		completionTokens: number;
-		totalTokens: number;
-	};
+	usage?: Usage;
 }
 
 export interface LLMProviderConfig {
@@ -43,6 +39,7 @@ export interface Message {
 	role: "user" | "assistant";
 	content: string;
 	timestamp: number;
+	meta?: MessageMeta;
 }
 
 export interface Conversation {
@@ -51,6 +48,7 @@ export interface Conversation {
 	messages: Message[];
 	provider: LLMProvider;
 	model: string;
+	projectId?: string;
 	createdAt: number;
 	updatedAt: number;
 	reasoningEffort?: "low" | "medium" | "high";
@@ -60,30 +58,44 @@ export interface Conversation {
 	webSearch?: boolean;
 }
 
-export interface Settings {
-	deepseekApiKey: string;
-	xaiApiKey: string;
-	poeApiKey: string;
-	deepseekModel: string;
-	xaiModel: string;
-	poeModel: string;
-	theme: "light" | "dark" | "auto";
+export interface Project {
+	id: string;
+	name: string;
+	description?: string;
+	createdAt: number;
+	updatedAt: number;
 }
 
-export const DEFAULT_SETTINGS: Settings = {
-	deepseekApiKey: "",
-	xaiApiKey: "",
-	poeApiKey: "",
-	deepseekModel: "deepseek-chat",
-	xaiModel: "grok-3",
-	poeModel: "kimi-k2.5",
-	theme: "auto",
-};
+export interface Usage {
+	promptTokens: number;
+	completionTokens: number;
+	totalTokens: number;
+	estimated?: boolean;
+}
+
+export interface MessageMeta {
+	usage?: Usage;
+	credits?: number;
+	reasoning?: string;
+	thinkingMs?: number;
+	webSearch?: {
+		provider: "x" | "xai";
+		query: string;
+		results: Array<{
+			id?: string;
+			author?: string;
+			text: string;
+			url?: string;
+			createdAt?: string;
+		}>;
+	};
+}
 
 export const PROVIDER_NAMES: Record<LLMProvider, string> = {
 	deepseek: "DeepSeek",
 	xai: "xAI",
 	poe: "Poe",
+	"workers-ai": "Workers AI",
 };
 
 export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
@@ -100,4 +112,9 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 		"grok-2-vision-1212",
 	],
 	poe: ["kimi-k2.5", "claude-sonnet-4.5", "o3", "gemini-3-pro"],
+	"workers-ai": [
+		"@cf/meta/llama-3.1-8b-instruct",
+		"@cf/meta/llama-3.1-70b-instruct",
+		"@cf/qwen/qwen1.5-7b-chat",
+	],
 };

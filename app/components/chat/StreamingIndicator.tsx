@@ -1,4 +1,4 @@
-import { useChat } from "../../hooks/useChat";
+import { useChat } from "../../contexts/ChatContext";
 
 export function StreamingIndicator() {
 	const { isStreaming } = useChat();
@@ -12,7 +12,7 @@ export function StreamingIndicator() {
 				<span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
 				<span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
 			</span>
-			<span>Thinking...</span>
+			<span>思考中...</span>
 		</div>
 	);
 }

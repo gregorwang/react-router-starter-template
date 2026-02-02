@@ -20,7 +20,7 @@ export function ChatLayout() {
 
 		if (!activeId) {
 			// Create a new conversation and navigate to it
-			const newConv = createConversation("New Chat", "openai", "gpt-4o");
+			const newConv = createConversation("新对话", "deepseek", "deepseek-chat");
 			setActiveConversation(newConv.id);
 			navigate(`/c/${newConv.id}`, { replace: true });
 		} else {

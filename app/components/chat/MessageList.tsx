@@ -16,7 +16,7 @@ export function MessageList() {
 		return (
 			<div className="flex items-center justify-center h-full">
 				<p className="text-gray-500 dark:text-gray-400">
-					Start a conversation by typing a message below
+					在下面输入内容开始对话
 				</p>
 			</div>
 		);
