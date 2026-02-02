@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import type { Settings } from "../lib/llm/types";
-import { getSettings, saveSettings } from "../lib/storage/settings-store";
+
 
 type Theme = "light" | "dark";
 
@@ -12,35 +11,28 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-	const [theme, setTheme] = useState<Theme>(() => {
-		if (typeof window === "undefined") {
-			return "dark";
-		}
+	const [theme, setTheme] = useState<Theme>("dark");
 
-		const settings = getSettings();
-		if (settings.theme === "auto") {
-			return window.matchMedia("(prefers-color-scheme: dark)").matches
-				? "dark"
-				: "light";
+	useEffect(() => {
+		const stored = localStorage.getItem("theme") as Theme | null;
+		if (stored) {
+			setTheme(stored);
+		} else {
+			const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+			setTheme(isDark ? "dark" : "light");
 		}
-		return settings.theme;
-	});
+	}, []);
 
 	useEffect(() => {
 		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-		const handleMediaChange = () => {
-			const settings = getSettings();
-			if (settings.theme === "auto") {
-				setTheme(mediaQuery.matches ? "dark" : "light");
+		const handleMediaChange = (e: MediaQueryListEvent) => {
+			if (!localStorage.getItem("theme")) {
+				setTheme(e.matches ? "dark" : "light");
 			}
 		};
 
 		mediaQuery.addEventListener("change", handleMediaChange);
-
-		return () => {
-			mediaQuery.removeEventListener("change", handleMediaChange);
-		};
+		return () => mediaQuery.removeEventListener("change", handleMediaChange);
 	}, []);
 
 	useEffect(() => {
@@ -54,9 +46,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 	const toggleTheme = () => {
 		setTheme((prev) => {
 			const newTheme = prev === "light" ? "dark" : "light";
-			const settings = getSettings();
-			settings.theme = newTheme;
-			saveSettings(settings);
+			localStorage.setItem("theme", newTheme);
 			return newTheme;
 		});
 	};

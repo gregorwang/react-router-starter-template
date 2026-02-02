@@ -1,4 +1,4 @@
-export type LLMProvider = "openai" | "anthropic" | "google" | "deepseek";
+export type LLMProvider = "deepseek" | "xai" | "poe";
 
 export interface LLMMessage {
 	role: "user" | "assistant" | "system";
@@ -53,42 +53,51 @@ export interface Conversation {
 	model: string;
 	createdAt: number;
 	updatedAt: number;
+	reasoningEffort?: "low" | "medium" | "high";
+	enableThinking?: boolean;
+	thinkingBudget?: number;
+	thinkingLevel?: "low" | "medium" | "high";
+	webSearch?: boolean;
 }
 
 export interface Settings {
-	openaiApiKey: string;
-	anthropicApiKey: string;
-	googleApiKey: string;
 	deepseekApiKey: string;
-	openaiModel: string;
-	anthropicModel: string;
-	googleModel: string;
+	xaiApiKey: string;
+	poeApiKey: string;
 	deepseekModel: string;
+	xaiModel: string;
+	poeModel: string;
 	theme: "light" | "dark" | "auto";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-	openaiApiKey: "",
-	anthropicApiKey: "",
-	googleApiKey: "",
 	deepseekApiKey: "",
-	openaiModel: "gpt-4o",
-	anthropicModel: "claude-3-5-sonnet-20241022",
-	googleModel: "gemini-2.0-flash-exp",
+	xaiApiKey: "",
+	poeApiKey: "",
 	deepseekModel: "deepseek-chat",
+	xaiModel: "grok-3",
+	poeModel: "kimi-k2.5",
 	theme: "auto",
 };
 
 export const PROVIDER_NAMES: Record<LLMProvider, string> = {
-	openai: "OpenAI",
-	anthropic: "Anthropic",
-	google: "Google",
 	deepseek: "DeepSeek",
+	xai: "xAI",
+	poe: "Poe",
 };
 
 export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
-	openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-	anthropic: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
-	google: ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro"],
-	deepseek: ["deepseek-chat", "deepseek-coder"],
+	deepseek: ["deepseek-chat", "deepseek-reasoner"],
+	xai: [
+		"grok-4-1-fast-reasoning",
+		"grok-4-1-fast-non-reasoning",
+		"grok-code-fast-1",
+		"grok-4-fast-reasoning",
+		"grok-4-fast-non-reasoning",
+		"grok-4-0709",
+		"grok-3-mini",
+		"grok-3",
+		"grok-2-vision-1212",
+	],
+	poe: ["kimi-k2.5", "claude-sonnet-4.5", "o3", "gemini-3-pro"],
 };

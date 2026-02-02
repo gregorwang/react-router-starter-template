@@ -22,8 +22,8 @@ export async function loader({ context, params }: Route.LoaderArgs) {
 		conversation = {
 			id: conversationId,
 			title: "New Chat",
-			provider: "openai",
-			model: "gpt-4o",
+			provider: "deepseek",
+			model: "deepseek-chat",
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			messages: [],
@@ -40,15 +40,19 @@ export async function loader({ context, params }: Route.LoaderArgs) {
 
 export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const navigate = useNavigate();
-	const { loadConversation } = useChat();
+	const { setCurrentConversation } = useChat();
 	const { conversationId, conversation, conversations } = loaderData;
 
-	// Load conversation into context when component mounts
+	// Load conversation into context when component mounts or conversation changes
 	useEffect(() => {
 		if (conversation) {
-			loadConversation(conversationId);
+			setCurrentConversation(conversation);
 		}
-	}, [conversation, conversationId, loadConversation]);
+		return () => {
+			// Clear conversation when unmounting
+			setCurrentConversation(null);
+		};
+	}, [conversation, setCurrentConversation]);
 
 	const handleNewChat = useCallback(() => {
 		// Generate new UUID and navigate

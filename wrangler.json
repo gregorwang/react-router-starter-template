@@ -3,7 +3,9 @@
 	"name": "react-router-starter-template",
 	"main": "./workers/app.ts",
 	"compatibility_date": "2025-10-08",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"observability": {
 		"enabled": true
 	},
@@ -16,6 +18,12 @@
 			"binding": "DB",
 			"database_name": "d1database",
 			"database_id": "d71d0cff-0de4-406f-b1a2-c74e095878e7"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SETTINGS_KV",
+			"id": "37122faa1e904d958cd4b08e1aad83b2"
 		}
 	]
 }

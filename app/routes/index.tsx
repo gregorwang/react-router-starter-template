@@ -1,14 +1,12 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router";
+import { redirect } from "react-router";
+import type { Route } from "./+types/index";
 
+// Server-side redirect - faster than client-side useNavigate
+export function loader({ }: Route.LoaderArgs) {
+	return redirect("/conversations");
+}
+
+// Component won't be rendered due to redirect, but needed for type safety
 export default function Index() {
-	const navigate = useNavigate();
-
-	useEffect(() => {
-		// Redirect to conversations page on mount
-		navigate("/conversations", { replace: true });
-	}, [navigate]);
-
-	// Return empty div while redirecting
-	return <div className="h-screen bg-gray-50 dark:bg-gray-900" />;
+	return null;
 }

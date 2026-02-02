@@ -80,43 +80,50 @@ export async function saveConversation(
 	db: D1Database,
 	conversation: Conversation,
 ): Promise<void> {
+	// Use batch for atomic operations
+	const statements: D1PreparedStatement[] = [];
+
 	// Insert or update conversation
-	await db
-		.prepare(
-			`INSERT INTO conversations (id, title, provider, model, created_at, updated_at)
+	statements.push(
+		db
+			.prepare(
+				`INSERT INTO conversations (id, title, provider, model, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				title = excluded.title,
 				provider = excluded.provider,
 				model = excluded.model,
 				updated_at = excluded.updated_at`,
-		)
-		.bind(
-			conversation.id,
-			conversation.title,
-			conversation.provider,
-			conversation.model,
-			conversation.createdAt,
-			conversation.updatedAt,
-		)
-		.run();
+			)
+			.bind(
+				conversation.id,
+				conversation.title,
+				conversation.provider,
+				conversation.model,
+				conversation.createdAt,
+				conversation.updatedAt,
+			),
+	);
 
-	// Delete existing messages and re-insert (simpler than upsert for messages)
-	await db.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(conversation.id).run();
+	// Delete existing messages
+	statements.push(
+		db.prepare("DELETE FROM messages WHERE conversation_id = ?").bind(conversation.id),
+	);
 
-	// Insert messages
-	if (conversation.messages.length > 0) {
-		const insertMessage = db.prepare(
-			`INSERT INTO messages (id, conversation_id, role, content, timestamp)
-			VALUES (?, ?, ?, ?, ?)`,
+	// Insert all messages
+	for (const message of conversation.messages) {
+		statements.push(
+			db
+				.prepare(
+					`INSERT INTO messages (id, conversation_id, role, content, timestamp)
+				VALUES (?, ?, ?, ?, ?)`,
+				)
+				.bind(message.id, conversation.id, message.role, message.content, message.timestamp),
 		);
-
-		for (const message of conversation.messages) {
-			await insertMessage
-				.bind(message.id, conversation.id, message.role, message.content, message.timestamp)
-				.run();
-		}
 	}
+
+	// Execute all statements atomically
+	await db.batch(statements);
 }
 
 export async function deleteConversation(db: D1Database, id: string): Promise<void> {

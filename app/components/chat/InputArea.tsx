@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
+import { useChat as useChatContext } from "../../contexts/ChatContext";
 import { SendButton } from "./SendButton";
 
 export function InputArea() {
 	const [input, setInput] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const { sendMessage, currentConversation } = useChat();
-
-	const isStreaming = false; // Will be managed by ChatContext
+	const { isStreaming } = useChatContext();
 
 	useEffect(() => {
 		if (textareaRef.current) {

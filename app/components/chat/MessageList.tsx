@@ -25,7 +25,11 @@ export function MessageList() {
 	return (
 		<div ref={scrollRef} className="max-w-4xl mx-auto py-8 px-4 space-y-6">
 			{currentConversation.messages.map((message) => (
-				<MessageBubble key={message.id} message={message} />
+				<MessageBubble
+					key={message.id}
+					message={message}
+					modelName={!message.role.includes("user") ? currentConversation.model : undefined}
+				/>
 			))}
 		</div>
 	);
