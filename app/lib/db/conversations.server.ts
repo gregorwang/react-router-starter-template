@@ -167,7 +167,7 @@ export async function initDatabase(db: D1Database): Promise<void> {
 		.prepare(
 			`CREATE TABLE IF NOT EXISTS conversations (
 				id TEXT PRIMARY KEY,
-				project_id TEXT NOT NULL,
+				project_id TEXT NOT NULL DEFAULT 'default',
 				title TEXT NOT NULL,
 				provider TEXT NOT NULL,
 				model TEXT NOT NULL,
@@ -189,12 +189,6 @@ export async function initDatabase(db: D1Database): Promise<void> {
 				timestamp INTEGER NOT NULL,
 				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 			)`,
-		)
-		.run();
-
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id)",
 		)
 		.run();
 
@@ -222,6 +216,19 @@ export async function initDatabase(db: D1Database): Promise<void> {
 	} catch {
 		// Column already exists
 	}
+
+	// Indexes must be created after migrations to avoid missing-column errors.
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id)",
+		)
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)",
+		)
+		.run();
 
 	// Ensure default project exists
 	await db
