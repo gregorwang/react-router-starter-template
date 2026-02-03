@@ -11,9 +11,82 @@ export function useChat() {
 		updateLastMessage: updateMsg,
 		setLoading,
 		setStreaming,
+		setCurrentConversation,
 	} = useChatContext();
 
 	const abortControllerRef = useRef<AbortController | null>(null);
+	const autoCompactInFlightRef = useRef(false);
+
+	const AUTO_COMPACT_MESSAGE_THRESHOLD = 12;
+	const AUTO_COMPACT_TOKEN_THRESHOLD = 3500;
+	const AUTO_COMPACT_MIN_NEW_MESSAGES = 4;
+
+	const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
+	const estimateMessageTokens = (messages: Array<{ role: string; content: string }>) =>
+		messages.reduce((total, msg) => total + estimateTokens(msg.content), 0);
+
+	const maybeAutoCompact = useCallback(
+		async (
+			conversationId: string,
+			messages: Array<{ role: string; content: string }>,
+			summaryMessageCount: number,
+		) => {
+			if (autoCompactInFlightRef.current) return;
+
+			const totalMessages = messages.length;
+			const totalTokens = estimateMessageTokens(messages);
+			const newMessagesCount = Math.max(0, totalMessages - summaryMessageCount);
+
+			const shouldCompact =
+				(totalMessages >= AUTO_COMPACT_MESSAGE_THRESHOLD ||
+					totalTokens >= AUTO_COMPACT_TOKEN_THRESHOLD) &&
+				newMessagesCount >= AUTO_COMPACT_MIN_NEW_MESSAGES;
+
+			if (!shouldCompact) return;
+
+			autoCompactInFlightRef.current = true;
+			try {
+				const response = await fetch("/conversations/compact", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						conversationId,
+						messages,
+						summaryMessageCount,
+					}),
+				});
+				if (!response.ok) {
+					autoCompactInFlightRef.current = false;
+					return;
+				}
+				const data = (await response.json()) as {
+					summary?: string;
+					summaryUpdatedAt?: number;
+					summaryMessageCount?: number;
+				};
+				setCurrentConversation((prev) => {
+					if (!prev || prev.id !== conversationId) return prev;
+					return {
+						...prev,
+						summary: data.summary ?? prev.summary,
+						summaryUpdatedAt: data.summaryUpdatedAt ?? prev.summaryUpdatedAt,
+						summaryMessageCount:
+							data.summaryMessageCount ?? prev.summaryMessageCount,
+					};
+				});
+			} catch {
+				// Ignore auto-compact failures
+			} finally {
+				autoCompactInFlightRef.current = false;
+			}
+		},
+		[
+			setCurrentConversation,
+			AUTO_COMPACT_MESSAGE_THRESHOLD,
+			AUTO_COMPACT_TOKEN_THRESHOLD,
+			AUTO_COMPACT_MIN_NEW_MESSAGES,
+		],
+	);
 
 	const startConversation = useCallback(() => {
 		startConv();
@@ -28,6 +101,9 @@ export function useChat() {
 
 			setLoading(true);
 			setStreaming(true);
+
+			const conversationId = currentConversation.id;
+			const summaryMessageCount = currentConversation.summaryMessageCount ?? 0;
 
 			// Create message IDs upfront
 			const userMessageId = crypto.randomUUID();
@@ -65,11 +141,6 @@ export function useChat() {
 					}));
 
 				// Call the server action instead of client-side LLM APIs
-				console.log("[useChat] Sending message with:", {
-					provider: currentConversation.provider,
-					model: currentConversation.model,
-					id: currentConversation.id
-				});
 				const response = await fetch("/chat/action", {
 					method: "POST",
 					headers: {
@@ -204,6 +275,17 @@ export function useChat() {
 				}
 
 				updateMsg({ content: fullContent, meta: { ...meta } });
+
+				const assistantMessage = {
+					role: "assistant" as const,
+					content: fullContent,
+				};
+				const messagesForSummary = messages.concat([assistantMessage]);
+				void maybeAutoCompact(
+					conversationId,
+					messagesForSummary,
+					summaryMessageCount,
+				);
 			} catch (error) {
 				if ((error as Error).name === "AbortError") {
 					console.log("Request aborted");
@@ -224,6 +306,7 @@ export function useChat() {
 			updateMsg,
 			setLoading,
 			setStreaming,
+			maybeAutoCompact,
 		],
 	);
 

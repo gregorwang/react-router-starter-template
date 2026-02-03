@@ -11,12 +11,15 @@ import {
 } from "../lib/db/conversations.server";
 import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
 import type { Conversation } from "../lib/llm/types";
+import { requireAuth } from "../lib/auth.server";
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, params, request }: Route.LoaderArgs) {
+	await requireAuth(request, context.db);
 	const conversationId = params.id;
 	await ensureDefaultProject(context.db);
 	const projects = await getProjects(context.db);
+	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 	const requestedProjectId = url.searchParams.get("project");
 	const fallbackProjectId = requestedProjectId || projects[0]?.id || "default";
@@ -54,6 +57,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		conversation,
 		projects,
 		activeProjectId,
+		providerAvailability: {
+			deepseek: Boolean(env.DEEPSEEK_API_KEY),
+			xai: Boolean(env.XAI_API_KEY),
+			poe: Boolean(env.POE_API_KEY),
+			"workers-ai": Boolean(env.AI),
+		},
 	};
 }
 
@@ -65,6 +74,7 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const { setCurrentConversation } = useChat();
 	const { conversationId, conversation, conversations, projects, activeProjectId } =
 		loaderData;
+	const providerAvailability = loaderData.providerAvailability;
 
 	const activeProjectName = useMemo(
 		() => projects.find((project) => project.id === activeProjectId)?.name || "项目",
@@ -122,7 +132,7 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	}, [activeProjectId, location.pathname, navigate, searchParams]);
 
 	return (
-		<div className="flex h-screen relative">
+		<div className="flex h-screen min-h-0 overflow-hidden relative">
 			{sidebarOpen && (
 				<button
 					type="button"
@@ -145,6 +155,7 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 			<ChatContainer
 				onOpenSidebar={() => setSidebarOpen(true)}
 				activeProjectName={activeProjectName}
+				providerAvailability={providerAvailability}
 			/>
 		</div>
 	);
