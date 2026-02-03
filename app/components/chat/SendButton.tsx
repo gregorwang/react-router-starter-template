@@ -12,10 +12,10 @@ export function SendButton({ disabled, onClick }: SendButtonProps) {
 			onClick={onClick}
 			disabled={disabled}
 			className={cn(
-				"p-2 rounded-lg transition-colors",
+				"p-2 rounded-xl transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 active:scale-[0.98]",
 				disabled
-					? "text-gray-400 cursor-not-allowed"
-					: "text-orange-500 hover:bg-gray-100 dark:hover:bg-gray-700",
+					? "text-neutral-400 cursor-not-allowed"
+					: "text-brand-600 hover:bg-brand-50/80 dark:hover:bg-neutral-800/60",
 			)}
 		>
 			<svg

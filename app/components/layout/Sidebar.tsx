@@ -1,7 +1,6 @@
 import { Form, Link, useLocation } from "react-router";
 import { Button } from "../shared/Button";
 import { SidebarItem } from "./SidebarItem";
-import { useTheme } from "../../hooks/useTheme";
 import { cn } from "../../lib/utils/cn";
 import type { Conversation, Project } from "../../lib/llm/types";
 
@@ -29,7 +28,6 @@ export function Sidebar({
 	onClose,
 }: SidebarProps) {
 	const location = useLocation();
-	const { theme, toggleTheme } = useTheme();
 
 	const isActive = (path: string) => {
 		return location.pathname === path;
@@ -38,12 +36,12 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"w-72 h-screen bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col transition-transform duration-200 md:translate-x-0",
+				"w-72 md:w-80 h-screen bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-transform duration-300 ease-out md:translate-x-0",
 				isOpen ? "translate-x-0" : "-translate-x-full",
 				className,
 			)}
 		>
-			<div className="p-4 space-y-3">
+			<div className="p-4 space-y-4">
 				<div className="flex items-center justify-between md:justify-start">
 					<Button onClick={onNewChat} className="w-full">
 						新对话
@@ -53,7 +51,7 @@ export function Sidebar({
 							type="button"
 							onClick={onClose}
 							aria-label="关闭侧边栏"
-							className="md:hidden ml-3 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+							className="md:hidden ml-3 text-neutral-500 hover:text-brand-600 dark:hover:text-brand-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950 rounded-full"
 						>
 							✕
 						</button>
@@ -63,21 +61,21 @@ export function Sidebar({
 				{projects.length > 0 && (
 					<div className="space-y-2">
 						<div className="flex items-center justify-between">
-							<span className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+							<span className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
 								项目
 							</span>
 							{onNewProject && (
 								<button
 									type="button"
 									onClick={onNewProject}
-									className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+									className="text-xs text-neutral-500 hover:text-brand-600 dark:hover:text-brand-300 transition-colors focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950 rounded-md"
 								>
 									+ 新建
 								</button>
 							)}
 						</div>
 						<select
-							className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-transparent text-gray-700 dark:text-gray-200"
+							className="w-full text-sm border border-neutral-200/70 dark:border-neutral-700/70 rounded-xl px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 hover:border-brand-300/60 dark:hover:border-brand-700/50"
 							value={activeProjectId || projects[0]?.id || ""}
 							onChange={(e) => onProjectChange?.(e.target.value)}
 						>
@@ -91,13 +89,13 @@ export function Sidebar({
 				)}
 			</div>
 
-			<nav className="flex-1 overflow-y-auto px-2">
+			<nav className="flex-1 overflow-y-auto px-4">
 				{conversations.length === 0 ? (
-					<p className="text-gray-500 dark:text-gray-400 text-sm text-center py-4">
+					<p className="text-neutral-500 dark:text-neutral-400 text-sm text-center py-4">
 						暂无对话
 					</p>
 				) : (
-					<ul className="space-y-1">
+					<ul className="space-y-2">
 						{conversations.map((conv) => (
 							<li key={conv.id}>
 								<SidebarItem
@@ -110,16 +108,16 @@ export function Sidebar({
 				)}
 			</nav>
 
-			<div className="p-4 border-t border-gray-200 dark:border-gray-800">
-				<ul className="space-y-1">
+			<div className="p-4 border-t border-white/60 dark:border-neutral-800/70">
+				<ul className="space-y-2">
 					<li>
 						<Link
 							to="/conversations"
 							className={cn(
-								"block px-3 py-2 rounded-md text-sm font-medium transition-colors",
+								"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
 								isActive("/conversations")
-									? "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800",
+									? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
+									: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
 							)}
 						>
 							历史聊天记录
@@ -129,33 +127,25 @@ export function Sidebar({
 						<Link
 							to="/usage"
 							className={cn(
-								"block px-3 py-2 rounded-md text-sm font-medium transition-colors",
+								"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
 								isActive("/usage")
-									? "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-									: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800",
+									? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
+									: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
 							)}
 						>
 							用量
 						</Link>
 					</li>
+
 					<li>
 						<Form method="post" action="/logout">
 							<button
 								type="submit"
-								className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+								className="w-full text-left px-4 py-2 rounded-xl text-sm font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 							>
 								退出登录
 							</button>
 						</Form>
-					</li>
-
-					<li>
-						<button
-							onClick={toggleTheme}
-							className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-						>
-							{theme === "dark" ? "亮色模式" : "深色模式"}
-						</button>
 					</li>
 				</ul>
 			</div>

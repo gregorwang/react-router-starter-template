@@ -4,6 +4,7 @@ import { StreamingIndicator } from "./StreamingIndicator";
 import { cn } from "../../lib/utils/cn";
 import { useChat } from "../../contexts/ChatContext";
 import { PROVIDER_MODELS, PROVIDER_NAMES, type LLMProvider } from "../../lib/llm/types";
+import { useTheme } from "../../hooks/useTheme";
 import { useState } from "react";
 import { format } from "date-fns";
 
@@ -21,6 +22,7 @@ export function ChatContainer({
 	providerAvailability,
 }: ChatContainerProps) {
 	const { currentConversation, setCurrentConversation, isStreaming } = useChat();
+	const { theme, toggleTheme } = useTheme();
 	const [isCompacting, setIsCompacting] = useState(false);
 	const [isArchiving, setIsArchiving] = useState(false);
 
@@ -112,27 +114,27 @@ export function ChatContainer({
 			: null;
 
 	return (
-		<div className={cn("flex flex-col flex-1 min-h-0", className)}>
+		<div className={cn("flex flex-col flex-1 min-h-0 relative", className)}>
 			{/* Header with Model Selector */}
-			<div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 bg-white dark:bg-gray-900 relative">
-				<div className="flex items-center gap-2 flex-1">
+			<div className="h-16 border-b border-white/60 dark:border-neutral-800/70 flex items-center px-6 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
+				<div className="flex items-center gap-2 flex-1 min-w-0">
 					{onOpenSidebar && (
 						<button
 							type="button"
 							onClick={onOpenSidebar}
-							className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-300"
+							className="md:hidden p-2 -ml-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60 transition-colors focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 							aria-label="打开侧边栏"
 						>
 							☰
 						</button>
 					)}
 					{activeProjectName && (
-						<span className="text-xs uppercase tracking-wide text-gray-400 hidden sm:block">
+						<span className="text-[10px] uppercase tracking-[0.25em] text-neutral-400 hidden sm:block">
 							{activeProjectName}
 						</span>
 					)}
 					<select
-						className="text-sm border-none bg-transparent text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer font-medium"
+						className="text-sm border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 rounded-xl px-3 py-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 cursor-pointer font-semibold transition hover:border-brand-300/60 dark:hover:border-brand-700/50"
 						value={currentConversation ? `${currentConversation.provider}:${currentConversation.model}` : ""}
 						onChange={handleModelChange}
 						disabled={!currentConversation}
@@ -161,7 +163,7 @@ export function ChatContainer({
 							isCompacting ||
 							currentConversation.messages.length < 2
 						}
-						className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-transparent text-gray-600 dark:text-gray-400 focus:ring-1 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
 						title="将当前对话压缩为摘要，用于后续上下文"
 					>
 						{isCompacting ? "压缩中..." : "记忆压缩"}
@@ -171,26 +173,26 @@ export function ChatContainer({
 						type="button"
 						onClick={handleArchive}
 						disabled={!currentConversation || isStreaming || isArchiving}
-						className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-transparent text-gray-600 dark:text-gray-400 focus:ring-1 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
 						title="将当前对话完整归档到 R2"
 					>
 						{isArchiving ? "归档中..." : "一键归档"}
 					</button>
 
 					{summaryLabel && (
-						<span className="text-xs text-gray-400 ml-2 hidden sm:block">
+						<span className="text-xs text-neutral-400 ml-2 hidden sm:block">
 							{summaryLabel}
 						</span>
 					)}
 					{currentConversation && !currentProviderAvailable && (
-						<span className="text-xs text-red-500 ml-2">
+						<span className="text-xs text-rose-500 ml-2">
 							当前模型密钥未配置
 						</span>
 					)}
 
 					{currentConversation?.model === "o3" && (
 						<select
-							className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-transparent text-gray-600 dark:text-gray-400 focus:ring-1 cursor-pointer ml-2"
+							className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
 							value={currentConversation.reasoningEffort || "high"}
 							onChange={(e) => setCurrentConversation({ ...currentConversation, reasoningEffort: e.target.value as "low" | "medium" | "high" })}
 						>
@@ -204,28 +206,28 @@ export function ChatContainer({
 						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
 							<input
 								type="checkbox"
-								className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
 								checked={currentConversation.enableThinking ?? true}
 								onChange={(e) => setCurrentConversation({ ...currentConversation, enableThinking: e.target.checked })}
 							/>
-							<span className="text-xs text-gray-600 dark:text-gray-400 font-medium">允许思考</span>
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">允许思考</span>
 						</label>
 					)}
 
 					{currentConversation?.model === "claude-sonnet-4.5" && (
 						<div className="flex items-center gap-2 ml-2">
-							<span className="text-xs text-gray-600 dark:text-gray-400 font-medium">思考预算：</span>
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">思考预算：</span>
 							<input
 								type="range"
 								min="1024"
 								max="32768"
 								step="1024"
-								className="w-24 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+								className="w-24 h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700 accent-brand-600"
 								value={currentConversation.thinkingBudget || 12288}
 								onChange={(e) => setCurrentConversation({ ...currentConversation, thinkingBudget: parseInt(e.target.value) })}
 								title={`思考预算：${currentConversation.thinkingBudget || 12288} tokens`}
 							/>
-							<span className="text-xs text-gray-500 w-12 text-right">
+							<span className="text-xs text-neutral-500 w-12 text-right">
 								{(currentConversation.thinkingBudget || 12288) / 1024}k
 							</span>
 						</div>
@@ -234,7 +236,7 @@ export function ChatContainer({
 					{currentConversation?.model === "gemini-3-pro" && (
 						<>
 							<select
-								className="text-xs border border-gray-200 dark:border-gray-700 rounded px-2 py-1 bg-transparent text-gray-600 dark:text-gray-400 focus:ring-1 cursor-pointer ml-2"
+								className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
 								value={currentConversation.thinkingLevel || "high"}
 								onChange={(e) => setCurrentConversation({ ...currentConversation, thinkingLevel: e.target.value as "low" | "medium" | "high" })}
 							>
@@ -246,11 +248,11 @@ export function ChatContainer({
 							<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
 								<input
 									type="checkbox"
-									className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+									className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
 									checked={currentConversation.webSearch ?? true}
 									onChange={(e) => setCurrentConversation({ ...currentConversation, webSearch: e.target.checked })}
 								/>
-								<span className="text-xs text-gray-600 dark:text-gray-400 font-medium">网络搜索</span>
+								<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">网络搜索</span>
 							</label>
 						</>
 					)}
@@ -259,7 +261,7 @@ export function ChatContainer({
 						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
 							<input
 								type="checkbox"
-								className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
 								checked={currentConversation.webSearch ?? true}
 								onChange={(e) =>
 									setCurrentConversation({
@@ -268,18 +270,60 @@ export function ChatContainer({
 									})
 								}
 							/>
-							<span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
 								X 搜索
 							</span>
 						</label>
 					)}
 				</div>
+				<button
+					type="button"
+					onClick={toggleTheme}
+					aria-label="切换明暗模式"
+					className="ml-3 w-10 h-10 rounded-full border border-white/60 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+				>
+					{theme === "dark" ? (
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="1.8"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							className="w-5 h-5"
+						>
+							<circle cx="12" cy="12" r="4"></circle>
+							<line x1="12" y1="2" x2="12" y2="4"></line>
+							<line x1="12" y1="20" x2="12" y2="22"></line>
+							<line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line>
+							<line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line>
+							<line x1="2" y1="12" x2="4" y2="12"></line>
+							<line x1="20" y1="12" x2="22" y2="12"></line>
+							<line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line>
+							<line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>
+						</svg>
+					) : (
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="1.8"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							className="w-5 h-5"
+						>
+							<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 1 0 9.8 9.8z"></path>
+						</svg>
+					)}
+				</button>
 			</div>
 
 			<div className="flex-1 min-h-0 overflow-hidden">
 				<MessageList />
 			</div>
-			<div className="border-t border-gray-200 dark:border-gray-800 p-4">
+			<div className="border-t border-white/60 dark:border-neutral-800/70 p-4 md:p-6 bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl">
 				<InputArea providerAvailable={currentProviderAvailable} />
 				<StreamingIndicator />
 			</div>

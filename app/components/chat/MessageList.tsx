@@ -40,10 +40,12 @@ export function MessageList() {
 
 	if (!currentConversation?.messages.length) {
 		return (
-			<div className="flex items-center justify-center h-full">
-				<p className="text-gray-500 dark:text-gray-400">
-					在下面输入内容开始对话
-				</p>
+			<div className="flex items-center justify-center h-full px-4">
+				<div className="rounded-2xl border border-white/60 dark:border-neutral-800/70 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl px-6 py-6 shadow-sm text-center">
+					<p className="text-neutral-600 dark:text-neutral-300 text-sm">
+						在下面输入内容开始对话
+					</p>
+				</div>
 			</div>
 		);
 	}
@@ -58,7 +60,11 @@ export function MessageList() {
 					<MessageBubble
 						key={message.id}
 						message={message}
-						modelName={!message.role.includes("user") ? currentConversation.model : undefined}
+						modelName={
+							message.role === "assistant"
+								? message.meta?.model ?? currentConversation.model
+								: undefined
+						}
 					/>
 				))}
 			</div>
@@ -67,7 +73,7 @@ export function MessageList() {
 					type="button"
 					onClick={scrollToBottom}
 					aria-label="回到底部"
-					className="absolute bottom-4 right-4 text-xs px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 shadow-sm"
+					className="absolute bottom-4 right-4 text-xs px-3 py-2 rounded-full border border-white/60 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/80 text-neutral-600 dark:text-neutral-300 shadow-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 				>
 					回到底部
 				</button>

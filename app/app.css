@@ -1,55 +1,106 @@
 @import "tailwindcss" source(".");
+@custom-variant dark (&:where(.dark, .dark *));
 @theme {
 	--font-sans:
-		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-		"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+		"Manrope", "Noto Sans", ui-sans-serif, system-ui, sans-serif,
+		"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+	--font-mono:
+		"JetBrains Mono", ui-monospace, SFMono-Regular, SFMono-Regular,
+		Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-	/* Claude-like color palette */
-	--color-orange: #f66e11;
-	--color-orange-light: #ff8c42;
-	--color-orange-dark: #d95d0a;
+	/* Brand palette */
+	--color-brand-50: #eff6ff;
+	--color-brand-100: #dbeafe;
+	--color-brand-200: #bfdbfe;
+	--color-brand-300: #93c5fd;
+	--color-brand-400: #60a5fa;
+	--color-brand-500: #3b82f6;
+	--color-brand-600: #2563eb;
+	--color-brand-700: #1d4ed8;
+	--color-brand-800: #1e40af;
+	--color-brand-900: #1e3a8a;
+	--color-brand-950: #172554;
 
-	--color-gray-50: #f9fafb;
-	--color-gray-100: #f3f4f6;
-	--color-gray-200: #e5e7eb;
-	--color-gray-300: #d1d5db;
-	--color-gray-400: #9ca3af;
-	--color-gray-500: #6b7280;
-	--color-gray-600: #4b5563;
-	--color-gray-700: #374151;
-	--color-gray-800: #1f2937;
-	--color-gray-900: #111827;
-	--color-gray-950: #0b0f19;
+	/* Secondary palette */
+	--color-secondary-50: #f0fdfa;
+	--color-secondary-100: #ccfbf1;
+	--color-secondary-200: #99f6e4;
+	--color-secondary-300: #5eead4;
+	--color-secondary-400: #2dd4bf;
+	--color-secondary-500: #14b8a6;
+	--color-secondary-600: #0d9488;
+	--color-secondary-700: #0f766e;
+	--color-secondary-800: #115e59;
+	--color-secondary-900: #134e4a;
+	--color-secondary-950: #042f2e;
+
+	/* Accent palette */
+	--color-accent-50: #fffbeb;
+	--color-accent-100: #fef3c7;
+	--color-accent-200: #fde68a;
+	--color-accent-300: #fcd34d;
+	--color-accent-400: #fbbf24;
+	--color-accent-500: #f59e0b;
+	--color-accent-600: #d97706;
+	--color-accent-700: #b45309;
+	--color-accent-800: #92400e;
+	--color-accent-900: #78350f;
+	--color-accent-950: #451a03;
+
+	/* Neutral palette */
+	--color-neutral-50: #f8fafc;
+	--color-neutral-100: #f1f5f9;
+	--color-neutral-200: #e2e8f0;
+	--color-neutral-300: #cbd5e1;
+	--color-neutral-400: #94a3b8;
+	--color-neutral-500: #64748b;
+	--color-neutral-600: #475569;
+	--color-neutral-700: #334155;
+	--color-neutral-800: #1e293b;
+	--color-neutral-900: #0f172a;
+	--color-neutral-950: #020617;
 }
 
 html,
 body {
-	@apply bg-white dark:bg-gray-950;
+	@apply bg-neutral-50 text-neutral-900 font-sans antialiased;
+	color-scheme: light;
+	background-image:
+		radial-gradient(1200px circle at 8% -10%, rgba(59, 130, 246, 0.18), transparent 40%),
+		radial-gradient(900px circle at 90% 0%, rgba(20, 184, 166, 0.14), transparent 45%);
+	background-attachment: fixed;
+}
 
-	@media (prefers-color-scheme: dark) {
-		color-scheme: dark;
-	}
+html.dark {
+	color-scheme: dark;
+}
+
+html.dark body {
+	@apply bg-neutral-950 text-neutral-100;
+	background-image:
+		radial-gradient(1200px circle at 5% -10%, rgba(59, 130, 246, 0.22), transparent 45%),
+		radial-gradient(900px circle at 90% 0%, rgba(20, 184, 166, 0.2), transparent 50%);
 }
 
 /* Markdown prose styles */
 .prose {
-	@apply text-gray-900 dark:text-gray-100;
+	@apply text-neutral-900 dark:text-neutral-100;
 }
 
 .prose h1 {
-	@apply text-2xl font-bold mb-4 mt-6;
+	@apply text-2xl font-semibold tracking-tight mb-4 mt-6;
 }
 
 .prose h2 {
-	@apply text-xl font-bold mb-3 mt-5;
+	@apply text-xl font-semibold tracking-tight mb-4 mt-6;
 }
 
 .prose h3 {
-	@apply text-lg font-bold mb-2 mt-4;
+	@apply text-lg font-semibold tracking-tight mb-2 mt-4;
 }
 
 .prose p {
-	@apply mb-4 leading-relaxed;
+	@apply mb-4 leading-relaxed text-neutral-700 dark:text-neutral-200;
 }
 
 .prose ul,
@@ -66,7 +117,7 @@ body {
 }
 
 .prose strong {
-	@apply font-semibold;
+	@apply font-semibold text-neutral-900 dark:text-white;
 }
 
 .prose em {
@@ -74,45 +125,45 @@ body {
 }
 
 .prose code {
-	@apply px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 text-pink-600 dark:text-pink-400 rounded text-sm font-mono;
+	@apply px-2 py-1 bg-neutral-100 dark:bg-neutral-800 text-brand-700 dark:text-brand-300 rounded-md text-sm font-mono;
 }
 
 .prose pre {
-	@apply mb-4 p-4 bg-gray-900 dark:bg-gray-950 rounded-lg overflow-x-auto;
+	@apply mb-4 p-4 bg-neutral-900 dark:bg-neutral-950 rounded-xl overflow-x-auto border border-white/5;
 }
 
 .prose pre code {
-	@apply bg-transparent text-gray-100 dark:text-gray-100 p-0;
+	@apply bg-transparent text-neutral-100 dark:text-neutral-100 p-0;
 }
 
 .prose a {
-	@apply text-orange-500 hover:text-orange-600 underline;
+	@apply text-brand-600 hover:text-brand-500 underline underline-offset-4;
 }
 
 .prose blockquote {
-	@apply border-l-4 border-gray-300 dark:border-gray-700 pl-4 italic text-gray-600 dark:text-gray-400 mb-4;
+	@apply border-l-4 border-brand-200/70 dark:border-brand-900/60 pl-4 italic text-neutral-600 dark:text-neutral-300 mb-4 bg-white/60 dark:bg-neutral-900/60 rounded-lg py-4;
 }
 
 .prose hr {
-	@apply my-6 border-gray-200 dark:border-gray-800;
+	@apply my-6 border-neutral-200 dark:border-neutral-800;
 }
 
 .prose table {
-	@apply w-full mb-4 border-collapse;
+	@apply w-full mb-4 border-collapse text-sm;
 }
 
 .prose th,
 .prose td {
-	@apply border border-gray-200 dark:border-gray-700 px-3 py-2 text-left;
+	@apply border border-neutral-200 dark:border-neutral-800 px-4 py-2 text-left;
 }
 
 .prose th {
-	@apply bg-gray-50 dark:bg-gray-800 font-semibold;
+	@apply bg-neutral-100/80 dark:bg-neutral-900/80 font-semibold text-neutral-700 dark:text-neutral-200;
 }
 
 /* Shiki code blocks */
 .shiki {
-	@apply rounded-lg overflow-x-auto;
+	@apply rounded-xl overflow-x-auto border border-white/5;
 }
 
 /* Custom scrollbar */
@@ -121,13 +172,13 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-	@apply bg-gray-100 dark:bg-gray-800;
+	@apply bg-neutral-100/80 dark:bg-neutral-900/80;
 }
 
 ::-webkit-scrollbar-thumb {
-	@apply bg-gray-300 dark:bg-gray-600 rounded-full;
+	@apply bg-neutral-300 dark:bg-neutral-700 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	@apply bg-gray-400 dark:bg-gray-500;
+	@apply bg-neutral-400 dark:bg-neutral-600;
 }

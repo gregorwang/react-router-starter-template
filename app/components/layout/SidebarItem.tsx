@@ -22,10 +22,10 @@ export function SidebarItem({
 			<Link
 				to={`/c/${conversation.id}${projectParam}`}
 				className={cn(
-					"flex-1 flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors pr-8",
+					"flex-1 flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 pr-9 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
 					active
-						? "bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-						: "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800",
+						? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
+						: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60 hover:translate-x-0.5",
 				)}
 			>
 				<span className="truncate">{conversation.title}</span>
@@ -44,7 +44,7 @@ export function SidebarItem({
 				<button
 					type="submit"
 					disabled={isDeleting}
-					className="p-1 text-gray-400 hover:text-red-500 rounded"
+					className="p-1 text-neutral-400 hover:text-rose-500 rounded transition-colors"
 					title="删除对话"
 					onClick={(e) => {
 						if (!confirm("确定要删除这条对话吗？")) {

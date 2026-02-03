@@ -43,8 +43,8 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 					className={cn(
 						"w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
 						isUser
-							? "bg-orange-500 text-white"
-							: "bg-blue-600 text-white",
+							? "bg-brand-600 text-white"
+							: "bg-secondary-600 text-white",
 					)}
 				>
 					{isUser ? "我" : "AI"}
@@ -53,19 +53,31 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 
 			<div
 				className={cn(
-					"max-w-3xl rounded-lg px-4 py-3 overflow-hidden",
+					"max-w-3xl rounded-2xl px-4 py-4 overflow-hidden border transition-shadow duration-200 hover:shadow-md",
 					isUser
-						? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-						: "bg-transparent text-gray-900 dark:text-gray-100 font-sans",
+						? "bg-brand-600 text-white border-brand-500/30 shadow-md shadow-brand-600/20"
+						: "bg-white/80 dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-white/60 dark:border-neutral-800/60 shadow-sm backdrop-blur",
 				)}
 			>
 				{/* Role Label */}
-				<div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+				<div
+					className={cn(
+						"flex items-center justify-between text-xs mb-1",
+						isUser
+							? "text-white/70"
+							: "text-neutral-500 dark:text-neutral-400",
+					)}
+				>
 					<span>{isUser ? "你" : (modelName || "助手")}</span>
 					<button
 						type="button"
 						onClick={handleCopy}
-						className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+						className={cn(
+							"text-xs transition-colors",
+							isUser
+								? "text-white/70 hover:text-white"
+								: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
+						)}
 					>
 						{copied ? "已复制" : "复制"}
 					</button>
@@ -76,17 +88,17 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 					<MarkdownRenderer content={message.content} />
 				)}
 				{message.meta?.reasoning && message.meta.reasoning.trim().length > 0 && (
-					<details className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+					<details className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
 						<summary className="cursor-pointer select-none">
 							思考链
 						</summary>
-						<pre className="mt-2 whitespace-pre-wrap text-xs text-gray-600 dark:text-gray-300">
+						<pre className="mt-2 whitespace-pre-wrap text-xs text-neutral-600 dark:text-neutral-300">
 							{message.meta.reasoning}
 						</pre>
 					</details>
 				)}
 				{(formattedThinking || usage || message.meta?.credits) && (
-					<div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+					<div className="mt-2 flex flex-wrap gap-4 text-xs text-neutral-500 dark:text-neutral-400">
 						{formattedThinking && <span>思考用时：{formattedThinking}</span>}
 						{usage && (
 							<span>
@@ -101,8 +113,8 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 					</div>
 				)}
 				{message.meta?.webSearch?.results?.length ? (
-					<div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-						<div className="font-medium text-gray-600 dark:text-gray-300 mb-1">
+					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
 							X 搜索结果
 						</div>
 						<ul className="space-y-1">
