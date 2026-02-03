@@ -4,9 +4,11 @@ import { useCallback, useEffect } from "react";
 import { format } from "date-fns";
 import { getConversations } from "../lib/db/conversations.server";
 import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
+import { requireAuth } from "../lib/auth.server";
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, request }: Route.LoaderArgs) {
+	await requireAuth(request, context.db);
 	await ensureDefaultProject(context.db);
 	const projects = await getProjects(context.db);
 	const url = new URL(request.url);
@@ -145,7 +147,7 @@ function ConversationRow({
 	updatedAt: number;
 }) {
 	const backupFetcher = useFetcher<{ ok?: boolean; key?: string }>();
-	const downloadHref = `/conversations/backup?conversationId=${conversationId}&download=1`;
+	const downloadHref = `/conversations/archive?conversationId=${conversationId}&download=1`;
 
 	return (
 		<div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-orange-500 dark:hover:border-orange-500 transition-colors">
@@ -159,7 +161,7 @@ function ConversationRow({
 				</p>
 			</Link>
 			<div className="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-				<backupFetcher.Form method="post" action="/conversations/backup">
+				<backupFetcher.Form method="post" action="/conversations/archive">
 					<input type="hidden" name="conversationId" value={conversationId} />
 					<button
 						type="submit"

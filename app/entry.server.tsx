@@ -35,7 +35,28 @@ export default async function handleRequest(
 		await body.allReady;
 	}
 
+	const csp = [
+		"default-src 'self'",
+		"script-src 'self' 'unsafe-inline'",
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"font-src 'self' https://fonts.gstatic.com data:",
+		"img-src 'self' data:",
+		"connect-src 'self'",
+		"base-uri 'self'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+	].join("; ");
+
 	responseHeaders.set("Content-Type", "text/html");
+	responseHeaders.set("Content-Security-Policy", csp);
+	responseHeaders.set("X-Content-Type-Options", "nosniff");
+	responseHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
+	responseHeaders.set("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+	responseHeaders.set("X-Frame-Options", "DENY");
+	if (new URL(request.url).protocol === "https:") {
+		responseHeaders.set("Strict-Transport-Security", "max-age=15552000; includeSubDomains");
+	}
+	responseHeaders.set("Cache-Control", "no-store");
 	return new Response(body, {
 		headers: responseHeaders,
 		status: responseStatusCode,

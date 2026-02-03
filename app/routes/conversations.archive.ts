@@ -1,7 +1,9 @@
 import type { Route } from "./+types/conversations.archive";
 import { getConversation } from "../lib/db/conversations.server";
+import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
+	await requireAuth(request, context.db);
 	if (request.method !== "POST") {
 		return new Response("Method not allowed", { status: 405 });
 	}
@@ -11,8 +13,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("R2 binding not configured", { status: 500 });
 	}
 
-	const formData = await request.formData();
-	const conversationId = formData.get("conversationId") as string | null;
+	let conversationId: string | null = null;
+	const contentType = request.headers.get("Content-Type") || "";
+	if (contentType.includes("application/json")) {
+		const body = (await request.json()) as { conversationId?: string };
+		conversationId = body.conversationId?.trim() || null;
+	} else {
+		const formData = await request.formData();
+		conversationId = (formData.get("conversationId") as string | null)?.trim() || null;
+	}
 	if (!conversationId) {
 		return new Response("Missing conversationId", { status: 400 });
 	}
@@ -28,10 +37,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		httpMetadata: { contentType: "application/json" },
 	});
 
-	return Response.json({ ok: true, key });
+	return Response.json({ ok: true, key }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
+	await requireAuth(request, context.db);
 	const env = context.cloudflare.env;
 	if (!env.CHAT_ARCHIVE) {
 		return new Response("R2 binding not configured", { status: 500 });
@@ -45,6 +55,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 	if (!resolvedKey) {
 		return new Response("Missing key", { status: 400 });
+	}
+	if (!resolvedKey.startsWith("conversations/")) {
+		return new Response("Invalid key", { status: 400 });
+	}
+	if (resolvedKey.includes("..")) {
+		return new Response("Invalid key", { status: 400 });
 	}
 
 	const object = await env.CHAT_ARCHIVE.get(resolvedKey);
@@ -63,6 +79,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 			conversationId ? `conversation-${conversationId}.json` : "conversation.json";
 		headers.set("Content-Disposition", `attachment; filename="${filename}"`);
 	}
+	headers.set("Cache-Control", "no-store");
+	headers.set("X-Content-Type-Options", "nosniff");
 
 	return new Response(object.body, {
 		headers,

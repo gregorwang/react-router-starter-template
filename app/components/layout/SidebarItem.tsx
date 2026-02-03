@@ -31,7 +31,7 @@ export function SidebarItem({
 				<span className="truncate">{conversation.title}</span>
 			</Link>
 			<fetcher.Form
-				method="delete"
+				method="post"
 				action="/conversations/delete"
 				className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity"
 			>

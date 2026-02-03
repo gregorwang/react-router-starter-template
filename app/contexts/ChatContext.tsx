@@ -1,12 +1,18 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import {
+	createContext,
+	useContext,
+	useState,
+	useCallback,
+	type Dispatch,
+	type SetStateAction,
+} from "react";
 import type { Conversation, Message } from "../lib/llm/types";
 
 interface ChatContextValue {
 	currentConversation: Conversation | null;
 	isLoading: boolean;
 	isStreaming: boolean;
-	setCurrentConversation: (conversation: Conversation | null) => void;
-	loadConversation: (id: string) => void;
+	setCurrentConversation: Dispatch<SetStateAction<Conversation | null>>;
 	addMessage: (message: Message) => void;
 	updateLastMessage: (update: Partial<Message>) => void;
 	setLoading: (loading: boolean) => void;
@@ -22,14 +28,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
 	const [isLoading, setIsLoading] = useState(false);
 	const [isStreaming, setIsStreaming] = useState(false);
-
-	// Load conversation sets the current conversation from server data
-	// This is called by route components when they receive loader data
-	const loadConversation = useCallback((id: string) => {
-		// This is now a no-op - conversation loading happens via React Router loaders
-		// The route component should call setCurrentConversation directly with loader data
-		console.log("loadConversation called with id:", id);
-	}, []);
 
 	const addMessage = useCallback((message: Message) => {
 		setCurrentConversation((prev) => {
@@ -81,7 +79,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 				isLoading,
 				isStreaming,
 				setCurrentConversation,
-				loadConversation,
 				addMessage,
 				updateLastMessage,
 				setLoading: setIsLoading,

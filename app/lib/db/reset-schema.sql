@@ -5,6 +5,7 @@
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS sessions;
 
 -- Conversations table
 CREATE TABLE projects (
@@ -22,7 +23,10 @@ CREATE TABLE conversations (
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    summary TEXT,
+    summary_updated_at INTEGER,
+    summary_message_count INTEGER
 );
 
 -- Messages table
@@ -36,7 +40,15 @@ CREATE TABLE messages (
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+-- Sessions table
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
 -- Indexes
 CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX idx_conversations_updated_at ON conversations(updated_at DESC);
 CREATE INDEX idx_conversations_project_id ON conversations(project_id);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);

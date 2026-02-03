@@ -14,14 +14,16 @@
 		"publish": true
 	},
 	"dependencies": {
+		"@shikijs/langs": "^3.22.0",
+		"@shikijs/themes": "^3.22.0",
 		"clsx": "^2.1.1",
 		"date-fns": "^4.1.0",
-		"highlight.js": "^11.11.1",
 		"isbot": "5.1.32",
 		"marked": "^17.0.1",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
 		"react-router": "7.9.6",
+		"shiki": "^3.22.0",
 		"tailwind-merge": "^3.4.0"
 	},
 	"devDependencies": {
@@ -29,7 +31,6 @@
 		"@cloudflare/workers-types": "^4.20260131.0",
 		"@react-router/dev": "7.9.6",
 		"@tailwindcss/vite": "4.1.17",
-		"@types/highlight.js": "^9.12.4",
 		"@types/marked": "^5.0.2",
 		"@types/node": "24.10.1",
 		"@types/react": "^19.0.0",

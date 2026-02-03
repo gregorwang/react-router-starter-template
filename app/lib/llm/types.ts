@@ -5,33 +5,6 @@ export interface LLMMessage {
 	content: string;
 }
 
-export interface LLMStreamChunk {
-	content: string;
-	done: boolean;
-}
-
-export interface LLMResponse {
-	content: string;
-	usage?: Usage;
-}
-
-export interface LLMProviderConfig {
-	apiKey: string;
-	baseUrl?: string;
-	model?: string;
-}
-
-export interface LLMClientOptions {
-	provider: LLMProvider;
-	config: LLMProviderConfig;
-}
-
-export interface LLMStreamCallback {
-	onChunk: (chunk: string) => void;
-	onComplete: (content: string) => void;
-	onError: (error: Error) => void;
-}
-
 export type ConversationId = string;
 
 export interface Message {
@@ -51,6 +24,9 @@ export interface Conversation {
 	projectId?: string;
 	createdAt: number;
 	updatedAt: number;
+	summary?: string;
+	summaryUpdatedAt?: number;
+	summaryMessageCount?: number;
 	reasoningEffort?: "low" | "medium" | "high";
 	enableThinking?: boolean;
 	thinkingBudget?: number;

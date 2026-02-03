@@ -1,8 +1,7 @@
-import { parseMarkdown, hasCodeBlock } from "../../lib/utils/markdown";
-import { CodeBlock } from "./CodeBlock";
 import type { Message as MessageType } from "../../lib/llm/types";
 import { cn } from "../../lib/utils/cn";
 import { useMemo, useState } from "react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface MessageBubbleProps {
 	message: MessageType;
@@ -11,7 +10,6 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 	const isUser = message.role === "user";
-	const hasCode = hasCodeBlock(message.content);
 	const [copied, setCopied] = useState(false);
 	const usage = message.meta?.usage;
 	const thinkingMs = message.meta?.thinkingMs;
@@ -75,17 +73,7 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 				{isUser ? (
 					<p className="whitespace-pre-wrap">{message.content}</p>
 				) : (
-					<div className="prose dark:prose-invert max-w-none">
-						{hasCode ? (
-							<CodeBlock content={message.content} />
-						) : (
-							<div
-								dangerouslySetInnerHTML={{
-									__html: parseMarkdown(message.content),
-								}}
-							/>
-						)}
-					</div>
+					<MarkdownRenderer content={message.content} />
 				)}
 				{message.meta?.reasoning && message.meta.reasoning.trim().length > 0 && (
 					<details className="mt-3 text-xs text-gray-500 dark:text-gray-400">

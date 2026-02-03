@@ -3,10 +3,10 @@ import { useChat } from "../../hooks/useChat";
 import { useChat as useChatContext } from "../../contexts/ChatContext";
 import { SendButton } from "./SendButton";
 
-export function InputArea() {
+export function InputArea({ providerAvailable = true }: { providerAvailable?: boolean }) {
 	const [input, setInput] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const { sendMessage, currentConversation } = useChat();
+	const { sendMessage, currentConversation, abortGeneration } = useChat();
 	const { isStreaming } = useChatContext();
 
 	useEffect(() => {
@@ -56,11 +56,27 @@ export function InputArea() {
 				placeholder="输入消息..."
 				className="w-full pr-12 pl-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none overflow-hidden"
 				rows={1}
-				disabled={isStreaming}
+				disabled={isStreaming || !providerAvailable}
 			/>
 			<div className="absolute right-2 top-1/2 -translate-y-1/2">
-				<SendButton disabled={!input.trim() || isStreaming} />
+				<div className="flex items-center gap-2">
+					{isStreaming && (
+						<button
+							type="button"
+							onClick={abortGeneration}
+							className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+						>
+							停止
+						</button>
+					)}
+					<SendButton disabled={!input.trim() || isStreaming || !providerAvailable} />
+				</div>
 			</div>
+			{!providerAvailable && (
+				<p className="mt-2 text-xs text-red-500">
+					当前模型密钥未配置，请在环境变量中设置。
+				</p>
+			)}
 		</form>
 	);
 }

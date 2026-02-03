@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useCallback } from "react";
 import { getUsageStats } from "../lib/db/usage.server";
 import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
+import { requireAuth } from "../lib/auth.server";
 
 type RangeKey = "today" | "7d" | "30d";
 
@@ -13,6 +14,7 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 };
 
 export async function loader({ context, request }: Route.LoaderArgs) {
+	await requireAuth(request, context.db);
 	await ensureDefaultProject(context.db);
 	const projects = await getProjects(context.db);
 

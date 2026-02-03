@@ -77,10 +77,6 @@ export async function streamLLMFromServer(
 
 	(async () => {
 		try {
-			console.log(
-				`[LLM Server] Streaming request: Provider=${provider}, Model=${model}`,
-			);
-
 			let requestMessages = messages;
 			let searchMeta: LLMStreamEvent["search"] | undefined;
 
@@ -433,7 +429,14 @@ async function maybeInjectXSearch(
 }
 
 function formatUserFacingError(message: string) {
-	return message;
+	const lowered = message.toLowerCase();
+	if (lowered.includes("api key")) {
+		return "模型密钥未配置或无效。";
+	}
+	if (lowered.includes("rate limit")) {
+		return "请求过于频繁，请稍后再试。";
+	}
+	return "上游服务暂时不可用，请稍后再试。";
 }
 
 async function fetchXSearchResults(apiKey: string, query: string) {

@@ -1,7 +1,9 @@
 import type { Route } from "./+types/projects.create";
 import { createProject, getProject } from "../lib/db/projects.server";
+import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
+	await requireAuth(request, context.db);
 	if (request.method !== "POST") {
 		return new Response("Method not allowed", { status: 405 });
 	}

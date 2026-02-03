@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router";
+import { Form, Link, useLocation } from "react-router";
 import { Button } from "../shared/Button";
 import { SidebarItem } from "./SidebarItem";
 import { useTheme } from "../../hooks/useTheme";
@@ -137,6 +137,16 @@ export function Sidebar({
 						>
 							用量
 						</Link>
+					</li>
+					<li>
+						<Form method="post" action="/logout">
+							<button
+								type="submit"
+								className="w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+							>
+								退出登录
+							</button>
+						</Form>
 					</li>
 
 					<li>

@@ -9,6 +9,9 @@ export interface DBConversation {
 	model: string;
 	created_at: number;
 	updated_at: number;
+	summary?: string;
+	summary_updated_at?: number;
+	summary_message_count?: number;
 }
 
 export interface DBMessage {
@@ -46,6 +49,9 @@ export async function getConversations(
 		model: row.model,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		summary: row.summary || undefined,
+		summaryUpdatedAt: row.summary_updated_at ?? undefined,
+		summaryMessageCount: row.summary_message_count ?? undefined,
 		messages: JSON.parse(row.messages || "[]").map((message: any) => ({
 			...message,
 			meta:
@@ -86,6 +92,9 @@ export async function getConversation(
 		model: row.model,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		summary: row.summary || undefined,
+		summaryUpdatedAt: row.summary_updated_at ?? undefined,
+		summaryMessageCount: row.summary_message_count ?? undefined,
 		messages: JSON.parse(row.messages || "[]").map((message: any) => ({
 			...message,
 			meta:
@@ -107,14 +116,28 @@ export async function saveConversation(
 	statements.push(
 		db
 			.prepare(
-				`INSERT INTO conversations (id, project_id, title, provider, model, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+				`INSERT INTO conversations (
+					id,
+					project_id,
+					title,
+					provider,
+					model,
+					created_at,
+					updated_at,
+					summary,
+					summary_updated_at,
+					summary_message_count
+				)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				project_id = excluded.project_id,
 				title = excluded.title,
 				provider = excluded.provider,
 				model = excluded.model,
-				updated_at = excluded.updated_at`,
+				updated_at = excluded.updated_at,
+				summary = COALESCE(excluded.summary, summary),
+				summary_updated_at = COALESCE(excluded.summary_updated_at, summary_updated_at),
+				summary_message_count = COALESCE(excluded.summary_message_count, summary_message_count)`,
 			)
 			.bind(
 				conversation.id,
@@ -124,6 +147,9 @@ export async function saveConversation(
 				conversation.model,
 				conversation.createdAt,
 				conversation.updatedAt,
+				conversation.summary ?? null,
+				conversation.summaryUpdatedAt ?? null,
+				conversation.summaryMessageCount ?? null,
 			),
 	);
 
@@ -155,6 +181,76 @@ export async function saveConversation(
 	await db.batch(statements);
 }
 
+export async function appendConversationMessages(
+	db: D1Database,
+	conversationId: string,
+	options: {
+		updatedAt: number;
+		title?: string;
+		provider?: string;
+		model?: string;
+	},
+	messages: Message[],
+): Promise<void> {
+	const statements: D1PreparedStatement[] = [];
+	const { updatedAt, title, provider, model } = options;
+
+	statements.push(
+		db
+			.prepare(
+				`UPDATE conversations
+				SET title = COALESCE(?, title),
+					provider = COALESCE(?, provider),
+					model = COALESCE(?, model),
+					updated_at = ?
+				WHERE id = ?`,
+			)
+			.bind(title ?? null, provider ?? null, model ?? null, updatedAt, conversationId),
+	);
+
+	for (const message of messages) {
+		statements.push(
+			db
+				.prepare(
+					`INSERT INTO messages (id, conversation_id, role, content, meta, timestamp)
+					VALUES (?, ?, ?, ?, ?, ?)
+					ON CONFLICT(id) DO UPDATE SET
+						role = excluded.role,
+						content = excluded.content,
+						meta = excluded.meta,
+						timestamp = excluded.timestamp`,
+				)
+				.bind(
+					message.id,
+					conversationId,
+					message.role,
+					message.content,
+					message.meta ? JSON.stringify(message.meta) : null,
+					message.timestamp,
+				),
+		);
+	}
+
+	await db.batch(statements);
+}
+
+export async function updateConversationSummary(
+	db: D1Database,
+	id: string,
+	summary: string,
+	summaryUpdatedAt: number,
+	summaryMessageCount: number,
+): Promise<void> {
+	await db
+		.prepare(
+			`UPDATE conversations
+			SET summary = ?, summary_updated_at = ?, summary_message_count = ?
+			WHERE id = ?`,
+		)
+		.bind(summary, summaryUpdatedAt, summaryMessageCount, id)
+		.run();
+}
+
 export async function deleteConversation(db: D1Database, id: string): Promise<void> {
 	// Messages will be deleted via CASCADE
 	await db.prepare("DELETE FROM conversations WHERE id = ?").bind(id).run();
@@ -172,7 +268,10 @@ export async function initDatabase(db: D1Database): Promise<void> {
 				provider TEXT NOT NULL,
 				model TEXT NOT NULL,
 				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL
+				updated_at INTEGER NOT NULL,
+				summary TEXT,
+				summary_updated_at INTEGER,
+				summary_message_count INTEGER
 			)`,
 		)
 		.run();
@@ -188,6 +287,16 @@ export async function initDatabase(db: D1Database): Promise<void> {
 				meta TEXT,
 				timestamp INTEGER NOT NULL,
 				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+			)`,
+		)
+		.run();
+
+	await db
+		.prepare(
+			`CREATE TABLE IF NOT EXISTS sessions (
+				id TEXT PRIMARY KEY,
+				created_at INTEGER NOT NULL,
+				expires_at INTEGER NOT NULL
 			)`,
 		)
 		.run();
@@ -217,6 +326,30 @@ export async function initDatabase(db: D1Database): Promise<void> {
 		// Column already exists
 	}
 
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN summary TEXT").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN summary_updated_at INTEGER").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN summary_message_count INTEGER").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL").run();
+	} catch {
+		// Column already exists or table is new
+	}
+
 	// Indexes must be created after migrations to avoid missing-column errors.
 	await db
 		.prepare(
@@ -228,6 +361,10 @@ export async function initDatabase(db: D1Database): Promise<void> {
 		.prepare(
 			"CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)",
 		)
+		.run();
+
+	await db
+		.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
 		.run();
 
 	// Ensure default project exists
