@@ -41,24 +41,28 @@ export async function getUsageStats(
 
 	for (const row of (results || []) as Array<{ meta?: string | null; model?: string }>) {
 		totalCalls += 1;
-		const model = row.model || "unknown";
-		models[model] = (models[model] || 0) + 1;
+		let metaModel: string | undefined;
 
-		if (!row.meta) {
-			continue;
-		}
-
-		try {
-			const parsed = JSON.parse(row.meta) as { usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } };
-			const usage = parsed?.usage;
-			if (usage) {
-				promptTokens += usage.promptTokens || 0;
-				completionTokens += usage.completionTokens || 0;
-				totalTokens += usage.totalTokens || 0;
+		if (row.meta) {
+			try {
+				const parsed = JSON.parse(row.meta) as {
+					model?: string;
+					usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+				};
+				metaModel = parsed.model;
+				const usage = parsed?.usage;
+				if (usage) {
+					promptTokens += usage.promptTokens || 0;
+					completionTokens += usage.completionTokens || 0;
+					totalTokens += usage.totalTokens || 0;
+				}
+			} catch {
+				// Ignore invalid meta JSON
 			}
-		} catch {
-			// Ignore invalid meta JSON
 		}
+
+		const model = metaModel || row.model || "unknown";
+		models[model] = (models[model] || 0) + 1;
 	}
 
 	return {

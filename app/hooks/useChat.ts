@@ -115,6 +115,10 @@ export function useChat() {
 				role: "user",
 				content,
 				timestamp: Date.now(),
+				meta: {
+					model: currentConversation.model,
+					provider: currentConversation.provider,
+				},
 			};
 			addMsg(userMessage);
 
@@ -124,7 +128,10 @@ export function useChat() {
 				role: "assistant",
 				content: "",
 				timestamp: Date.now(),
-				meta: {},
+				meta: {
+					model: currentConversation.model,
+					provider: currentConversation.provider,
+				},
 			};
 			addMsg(assistantMessage);
 
@@ -185,7 +192,10 @@ export function useChat() {
 
 				let fullContent = "";
 				let reasoning = "";
-				const meta: Message["meta"] = {};
+				const meta: Message["meta"] = {
+					model: currentConversation.model,
+					provider: currentConversation.provider,
+				};
 				const startedAt = Date.now();
 				let gotFirstToken = false;
 				let buffer = "";

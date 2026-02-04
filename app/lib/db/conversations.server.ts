@@ -62,6 +62,33 @@ export async function getConversations(
 	}));
 }
 
+export async function getConversationIndex(
+	db: D1Database,
+	projectId?: string,
+): Promise<Conversation[]> {
+	const statement = projectId
+		? db
+				.prepare("SELECT * FROM conversations WHERE project_id = ? ORDER BY updated_at DESC")
+				.bind(projectId)
+		: db.prepare("SELECT * FROM conversations ORDER BY updated_at DESC");
+
+	const { results } = await statement.all();
+
+	return (results || []).map((row: any) => ({
+		id: row.id,
+		projectId: row.project_id,
+		title: row.title,
+		provider: row.provider,
+		model: row.model,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		summary: row.summary || undefined,
+		summaryUpdatedAt: row.summary_updated_at ?? undefined,
+		summaryMessageCount: row.summary_message_count ?? undefined,
+		messages: [],
+	}));
+}
+
 export async function getConversation(
 	db: D1Database,
 	id: string,
