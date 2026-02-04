@@ -4,11 +4,13 @@ import type { LLMMessage, LLMProvider, Usage } from "../lib/llm/types";
 import {
 	appendConversationMessages,
 	getConversation,
+	saveConversation,
 } from "../lib/db/conversations.server";
 import { requireAuth } from "../lib/auth.server";
 
 interface ChatActionData {
 	conversationId: string;
+	projectId?: string;
 	messages: LLMMessage[];
 	provider: LLMProvider;
 	model: string;
@@ -18,6 +20,8 @@ interface ChatActionData {
 	enableThinking?: boolean;
 	thinkingBudget?: number;
 	thinkingLevel?: "low" | "medium" | "high";
+	outputTokens?: number;
+	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
 }
 
@@ -56,6 +60,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 		const {
 			conversationId,
+			projectId,
 			messages,
 			provider,
 			model,
@@ -65,6 +70,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			enableThinking,
 			thinkingBudget,
 			thinkingLevel,
+			outputTokens,
+			outputEffort,
 			webSearch,
 		} = data;
 
@@ -86,9 +93,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 			);
 		}
 
-		const existingConversation = await getConversation(context.db, conversationId);
+		let existingConversation = await getConversation(context.db, conversationId);
 		if (!existingConversation) {
-			return new Response("Conversation not found", { status: 404 });
+			const now = Date.now();
+			const nextConversation = {
+				id: conversationId,
+				projectId: projectId || "default",
+				title: "新对话",
+				provider,
+				model,
+				createdAt: now,
+				updatedAt: now,
+				messages: [],
+			};
+			await saveConversation(context.db, nextConversation);
+			existingConversation = nextConversation;
 		}
 
 		let contextMessages = messages;
@@ -131,6 +150,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 			enableThinking,
 			thinkingBudget,
 			thinkingLevel,
+			outputTokens,
+			outputEffort,
 			webSearch,
 		});
 

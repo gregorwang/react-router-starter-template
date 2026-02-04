@@ -12,6 +12,7 @@ export function useChat() {
 		setLoading,
 		setStreaming,
 		setCurrentConversation,
+		isStreaming,
 	} = useChatContext();
 
 	const abortControllerRef = useRef<AbortController | null>(null);
@@ -155,6 +156,7 @@ export function useChat() {
 					},
 					body: JSON.stringify({
 						conversationId: currentConversation.id,
+						projectId: currentConversation.projectId,
 						messages,
 						provider: currentConversation.provider,
 						model: currentConversation.model,
@@ -164,6 +166,8 @@ export function useChat() {
 						enableThinking: currentConversation.enableThinking,
 						thinkingBudget: currentConversation.thinkingBudget,
 						thinkingLevel: currentConversation.thinkingLevel,
+						outputTokens: currentConversation.outputTokens,
+						outputEffort: currentConversation.outputEffort,
 						webSearch: currentConversation.webSearch,
 					}),
 					signal: abortControllerRef.current.signal,
@@ -331,5 +335,6 @@ export function useChat() {
 		sendMessage,
 		abortGeneration,
 		startConversation,
+		isStreaming,
 	};
 }

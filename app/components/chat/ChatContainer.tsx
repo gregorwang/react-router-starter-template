@@ -1,6 +1,5 @@
 import { MessageList } from "./MessageList";
 import { InputArea } from "./InputArea";
-import { StreamingIndicator } from "./StreamingIndicator";
 import { cn } from "../../lib/utils/cn";
 import { useChat } from "../../contexts/ChatContext";
 import { PROVIDER_MODELS, PROVIDER_NAMES, type LLMProvider } from "../../lib/llm/types";
@@ -11,6 +10,8 @@ import { format } from "date-fns";
 interface ChatContainerProps {
 	className?: string;
 	onOpenSidebar?: () => void;
+	onToggleSidebar?: () => void;
+	isSidebarCollapsed?: boolean;
 	activeProjectName?: string;
 	providerAvailability?: Partial<Record<LLMProvider, boolean>>;
 }
@@ -18,6 +19,8 @@ interface ChatContainerProps {
 export function ChatContainer({
 	className,
 	onOpenSidebar,
+	onToggleSidebar,
+	isSidebarCollapsed = false,
 	activeProjectName,
 	providerAvailability,
 }: ChatContainerProps) {
@@ -116,8 +119,8 @@ export function ChatContainer({
 	return (
 		<div className={cn("flex flex-col flex-1 min-h-0 relative", className)}>
 			{/* Header with Model Selector */}
-			<div className="h-16 border-b border-white/60 dark:border-neutral-800/70 flex items-center px-6 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
-				<div className="flex items-center gap-2 flex-1 min-w-0">
+			<div className="h-16 border-b border-white/60 dark:border-neutral-800/70 flex items-center px-4 md:px-6 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
+				<div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto md:overflow-visible">
 					{onOpenSidebar && (
 						<button
 							type="button"
@@ -126,6 +129,42 @@ export function ChatContainer({
 							aria-label="打开侧边栏"
 						>
 							☰
+						</button>
+					)}
+					{onToggleSidebar && (
+						<button
+							type="button"
+							onClick={onToggleSidebar}
+							className="hidden md:inline-flex p-2 -ml-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60 transition-colors focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+							aria-label={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
+						>
+							{isSidebarCollapsed ? (
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									className="w-5 h-5"
+								>
+									<polyline points="9 18 15 12 9 6"></polyline>
+								</svg>
+							) : (
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									className="w-5 h-5"
+								>
+									<polyline points="15 18 9 12 15 6"></polyline>
+								</svg>
+							)}
 						</button>
 					)}
 					{activeProjectName && (
@@ -287,6 +326,79 @@ export function ChatContainer({
 							</span>
 						</label>
 					)}
+
+					{currentConversation?.provider === "poloai" &&
+						currentConversation.model.startsWith("claude-opus") && (
+							<select
+								className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+								value={currentConversation.outputEffort || "max"}
+								onChange={(e) =>
+									setCurrentConversation({
+										...currentConversation,
+										outputEffort: e.target.value as
+											| "low"
+											| "medium"
+											| "high"
+											| "max",
+									})
+								}
+							>
+								<option value="low">输出强度：低</option>
+								<option value="medium">输出强度：中</option>
+								<option value="high">输出强度：高</option>
+								<option value="max">输出强度：最大</option>
+							</select>
+						)}
+
+					{currentConversation?.provider === "poloai" && (
+						<div className="flex items-center gap-2 ml-2">
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
+								输出预算：
+							</span>
+							<input
+								type="range"
+								min="512"
+								max="32768"
+								step="512"
+								className="w-24 h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700 accent-brand-600"
+								value={currentConversation.outputTokens || 2048}
+								onChange={(e) =>
+									setCurrentConversation({
+										...currentConversation,
+										outputTokens: parseInt(e.target.value),
+									})
+								}
+								title={`输出预算：${currentConversation.outputTokens || 2048} tokens`}
+							/>
+							<span className="text-xs text-neutral-500 w-12 text-right">
+								{(() => {
+									const value = currentConversation.outputTokens || 2048;
+									const kValue = value / 1024;
+									const label = kValue.toFixed(1).replace(/\.0$/, "");
+									return `${label}k`;
+								})()}
+							</span>
+						</div>
+					)}
+
+					{currentConversation?.provider === "poloai" && (
+						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
+							<input
+								type="checkbox"
+								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+								checked={currentConversation.webSearch ?? true}
+								onChange={(e) =>
+									setCurrentConversation({
+										...currentConversation,
+										webSearch: e.target.checked,
+									})
+								}
+							/>
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
+								网络搜索
+							</span>
+						</label>
+					)}
 				</div>
 				<button
 					type="button"
@@ -337,7 +449,6 @@ export function ChatContainer({
 			</div>
 			<div className="border-t border-white/60 dark:border-neutral-800/70 p-4 md:p-6 bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl">
 				<InputArea providerAvailable={currentProviderAvailable} />
-				<StreamingIndicator />
 			</div>
 		</div>
 	);

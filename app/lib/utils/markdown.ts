@@ -9,6 +9,7 @@ type Highlighter = {
 };
 
 let highlighterPromise: Promise<Highlighter> | null = null;
+let highlighterInstance: Highlighter | null = null;
 
 const htmlEscapeMap: Record<string, string> = {
 	"&": "&amp;",
@@ -89,7 +90,13 @@ async function getHighlighter() {
 			});
 		})();
 	}
-	return highlighterPromise;
+	try {
+		highlighterInstance = await highlighterPromise;
+		return highlighterInstance;
+	} catch {
+		highlighterInstance = null;
+		return null;
+	}
 }
 
 async function ensureMarked() {
@@ -98,6 +105,7 @@ async function ensureMarked() {
 		markedInstance = mod.marked;
 		const Renderer = mod.Renderer;
 		const renderer = new Renderer();
+		void getHighlighter();
 		renderer.html = () => "";
 		renderer.link = (href, title, text) => {
 			const safeHref = sanitizeLink(href);
@@ -108,14 +116,17 @@ async function ensureMarked() {
 			const target = external ? ' target="_blank"' : "";
 			return `<a href="${escapeHtml(safeHref)}"${titleAttr}${rel}${target}>${text}</a>`;
 		};
-		renderer.code = async (code: { text: string; lang?: string }) => {
-			const highlighter = await getHighlighter();
+		renderer.code = (code: { text: string; lang?: string }) => {
+			const highlighter = highlighterInstance;
 			const lang = normalizeLang(code.lang);
 			const theme = getThemeName();
 			if (lang === "text") {
 				return `<pre><code>${escapeHtml(code.text)}</code></pre>`;
 			}
 			try {
+				if (!highlighter) {
+					return `<pre><code>${escapeHtml(code.text)}</code></pre>`;
+				}
 				const html = highlighter.codeToHtml(code.text, { lang, theme });
 				return html;
 			} catch {
@@ -125,11 +136,57 @@ async function ensureMarked() {
 		rendererInstance = renderer;
 		markedInstance.use({ renderer });
 	}
-	markedInstance.setOptions({ breaks: true, gfm: true, async: true });
+	markedInstance.setOptions({ breaks: true, gfm: true });
 	return { marked: markedInstance, renderer: rendererInstance };
 }
 
+export function parseMarkdownSync(text: string): string | null {
+	if (!markedInstance) return null;
+	try {
+		return markedInstance.parse(text) as string;
+	} catch {
+		return null;
+	}
+}
+
 export async function parseMarkdown(text: string): Promise<string> {
-	const { marked } = await ensureMarked();
-	return (await marked.parse(text, { async: true })) as string;
+	try {
+		const { marked } = await ensureMarked();
+		return marked.parse(text) as string;
+	} catch {
+		return renderPlainTextAsHtml(text);
+	}
+}
+
+export function renderPlainTextAsHtml(text: string): string {
+	const linkPattern =
+		/\[\[([^\]]+)\]\]\((https?:\/\/[^)\s]+)\)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s)]+)/g;
+	let result = "";
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
+
+	while ((match = linkPattern.exec(text)) !== null) {
+		const [raw] = match;
+		const index = match.index ?? 0;
+		if (index > lastIndex) {
+			result += escapeHtml(text.slice(lastIndex, index));
+		}
+
+		const label = match[1] || match[3] || match[5] || raw;
+		const url = match[2] || match[4] || match[5];
+		if (url) {
+			const safeHref = sanitizeLink(url);
+			result += `<a href="${escapeHtml(safeHref)}" rel="noopener noreferrer" target="_blank">${escapeHtml(label)}</a>`;
+		} else {
+			result += escapeHtml(raw);
+		}
+
+		lastIndex = index + raw.length;
+	}
+
+	if (lastIndex < text.length) {
+		result += escapeHtml(text.slice(lastIndex));
+	}
+
+	return result.replace(/\n/g, "<br />");
 }

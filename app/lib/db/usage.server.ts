@@ -17,7 +17,16 @@ export async function getUsageStats(
 	const { startMs, endMs, projectId } = options;
 
 	let query = `
-		SELECT m.meta as meta, c.model as model
+		SELECT
+			CASE
+				WHEN json_valid(m.meta) AND json_extract(m.meta, '$.model') IS NOT NULL
+					THEN json_extract(m.meta, '$.model')
+				ELSE c.model
+			END as model,
+			COUNT(*) as calls,
+			SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.promptTokens'), 0) ELSE 0 END) as promptTokens,
+			SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.completionTokens'), 0) ELSE 0 END) as completionTokens,
+			SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.totalTokens'), 0) ELSE 0 END) as totalTokens
 		FROM messages m
 		JOIN conversations c ON c.id = m.conversation_id
 		WHERE m.role = 'assistant'
@@ -31,6 +40,8 @@ export async function getUsageStats(
 		params.push(projectId);
 	}
 
+	query += " GROUP BY model";
+
 	const { results } = await db.prepare(query).bind(...params).all();
 
 	let promptTokens = 0;
@@ -39,30 +50,21 @@ export async function getUsageStats(
 	let totalCalls = 0;
 	const models: Record<string, number> = {};
 
-	for (const row of (results || []) as Array<{ meta?: string | null; model?: string }>) {
-		totalCalls += 1;
-		let metaModel: string | undefined;
+	for (const row of (results || []) as Array<{
+		model?: string | null;
+		calls?: number | string | null;
+		promptTokens?: number | string | null;
+		completionTokens?: number | string | null;
+		totalTokens?: number | string | null;
+	}>) {
+		const calls = Number(row.calls || 0);
+		totalCalls += calls;
+		promptTokens += Number(row.promptTokens || 0);
+		completionTokens += Number(row.completionTokens || 0);
+		totalTokens += Number(row.totalTokens || 0);
 
-		if (row.meta) {
-			try {
-				const parsed = JSON.parse(row.meta) as {
-					model?: string;
-					usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
-				};
-				metaModel = parsed.model;
-				const usage = parsed?.usage;
-				if (usage) {
-					promptTokens += usage.promptTokens || 0;
-					completionTokens += usage.completionTokens || 0;
-					totalTokens += usage.totalTokens || 0;
-				}
-			} catch {
-				// Ignore invalid meta JSON
-			}
-		}
-
-		const model = metaModel || row.model || "unknown";
-		models[model] = (models[model] || 0) + 1;
+		const model = row.model || "unknown";
+		models[model] = (models[model] || 0) + calls;
 	}
 
 	return {

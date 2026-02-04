@@ -6,19 +6,39 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 interface MessageBubbleProps {
 	message: MessageType;
 	modelName?: string;
+	isStreaming?: boolean;
 }
 
-export function MessageBubble({ message, modelName }: MessageBubbleProps) {
+export function MessageBubble({
+	message,
+	modelName,
+	isStreaming,
+}: MessageBubbleProps) {
 	const isUser = message.role === "user";
 	const [copied, setCopied] = useState(false);
 	const usage = message.meta?.usage;
 	const thinkingMs = message.meta?.thinkingMs;
+	const normalizedContent = useMemo(() => {
+		if (!message.content) return message.content;
+		return message.content.replace(/\)\s*\[\[/g, ") [[");
+	}, [message.content]);
+	const hasReasoning = Boolean(message.meta?.reasoning?.trim());
+	const showThinkingStatus =
+		!isUser && (isStreaming || hasReasoning || Boolean(thinkingMs));
+	const showStreamingPlaceholder =
+		!isUser &&
+		isStreaming &&
+		message.content.trim().length === 0;
 
 	const formattedThinking = useMemo(() => {
 		if (!thinkingMs) return null;
 		if (thinkingMs < 1000) return `${thinkingMs}ms`;
 		return `${(thinkingMs / 1000).toFixed(1)}s`;
 	}, [thinkingMs]);
+	const citationUrls = useMemo(() => {
+		const urls = message.meta?.webSearch?.citations || [];
+		return urls.filter((url) => /^https?:\/\//i.test(url));
+	}, [message.meta?.webSearch?.citations]);
 
 	const handleCopy = async () => {
 		try {
@@ -82,20 +102,47 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 						{copied ? "已复制" : "复制"}
 					</button>
 				</div>
-				{isUser ? (
-					<p className="whitespace-pre-wrap">{message.content}</p>
-				) : (
-					<MarkdownRenderer content={message.content} />
+				{showThinkingStatus && (
+					<div className="mb-2 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+						<span
+							className={cn(
+								"inline-flex items-center gap-1.5",
+								isStreaming ? "text-amber-500" : "text-emerald-500",
+							)}
+						>
+							<span
+								className={cn(
+									"w-1.5 h-1.5 rounded-full",
+									isStreaming ? "bg-amber-400 animate-pulse" : "bg-emerald-400",
+								)}
+							/>
+							<span>{isStreaming ? "思考中..." : "思考完成"}</span>
+						</span>
+					</div>
 				)}
 				{message.meta?.reasoning && message.meta.reasoning.trim().length > 0 && (
-					<details className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
-						<summary className="cursor-pointer select-none">
-							思考链
-						</summary>
-						<pre className="mt-2 whitespace-pre-wrap text-xs text-neutral-600 dark:text-neutral-300">
+					<div className="mb-3 rounded-xl border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2">
+						<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80 dark:text-amber-300/80">
+							思维链
+						</div>
+						<pre className="mt-2 whitespace-pre-wrap text-xs text-amber-900 dark:text-amber-100">
 							{message.meta.reasoning}
 						</pre>
-					</details>
+					</div>
+				)}
+				{isUser ? (
+					<p className="whitespace-pre-wrap">{message.content}</p>
+				) : showStreamingPlaceholder ? (
+					<div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+						<span className="flex gap-1">
+							<span className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+							<span className="w-2 h-2 bg-secondary-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+							<span className="w-2 h-2 bg-accent-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+						</span>
+						<span>思考中...</span>
+					</div>
+				) : (
+					<MarkdownRenderer content={normalizedContent} />
 				)}
 				{(formattedThinking || usage || message.meta?.credits) && (
 					<div className="mt-2 flex flex-wrap gap-4 text-xs text-neutral-500 dark:text-neutral-400">
@@ -122,6 +169,27 @@ export function MessageBubble({ message, modelName }: MessageBubbleProps) {
 								<li key={`${result.id ?? index}`}>
 									{result.author ? `@${result.author}: ` : ""}
 									{result.text}
+								</li>
+							))}
+						</ul>
+					</div>
+				) : null}
+				{citationUrls.length > 0 ? (
+					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
+							X 搜索引用
+						</div>
+						<ul className="space-y-1">
+							{citationUrls.map((url, index) => (
+								<li key={`${url}-${index}`}>
+									<a
+										href={url}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-brand-600 hover:underline dark:text-brand-300"
+									>
+										{url}
+									</a>
 								</li>
 							))}
 						</ul>

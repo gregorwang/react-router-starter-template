@@ -1,11 +1,5 @@
-import { Suspense, lazy } from "react";
-
-const MarkdownRendererInner = lazy(() => import("./MarkdownRendererInner"));
+import MarkdownRendererInner from "./MarkdownRendererInner";
 
 export function MarkdownRenderer({ content }: { content: string }) {
-	return (
-		<Suspense fallback={<p className="whitespace-pre-wrap">{content}</p>}>
-			<MarkdownRendererInner content={content} />
-		</Suspense>
-	);
+	return <MarkdownRendererInner content={content} />;
 }

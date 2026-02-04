@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
 import { useChat as useChatContext } from "../../contexts/ChatContext";
 import { SendButton } from "./SendButton";
+import { cn } from "../../lib/utils/cn";
 
 export function InputArea({ providerAvailable = true }: { providerAvailable?: boolean }) {
 	const [input, setInput] = useState("");
@@ -54,7 +55,10 @@ export function InputArea({ providerAvailable = true }: { providerAvailable?: bo
 				onChange={(e) => setInput(e.target.value)}
 				onKeyDown={handleKeyDown}
 				placeholder="输入消息..."
-				className="w-full pr-12 pl-4 py-4 rounded-2xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 shadow-sm transition-all duration-200 resize-none overflow-hidden"
+				className={cn(
+					"w-full pl-4 py-4 rounded-2xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 shadow-sm transition-all duration-200 resize-none overflow-hidden",
+					isStreaming ? "pr-24" : "pr-12",
+				)}
 				rows={1}
 				disabled={isStreaming || !providerAvailable}
 			/>

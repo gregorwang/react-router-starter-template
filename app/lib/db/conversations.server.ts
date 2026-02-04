@@ -29,15 +29,17 @@ export async function getConversations(
 	projectId?: string,
 ): Promise<Conversation[]> {
 	const baseQuery = `SELECT c.*,
-			(SELECT json_group_array(
-				json_object('id', m.id, 'role', m.role, 'content', m.content, 'meta', json(m.meta), 'timestamp', m.timestamp)
-				ORDER BY m.timestamp
-			) FROM messages m WHERE m.conversation_id = c.id) as messages
-		FROM conversations c`;
+			COUNT(m.id) as message_count
+		FROM conversations c
+		LEFT JOIN messages m ON m.conversation_id = c.id`;
 
 	const statement = projectId
-		? db.prepare(`${baseQuery} WHERE c.project_id = ? ORDER BY c.updated_at DESC`).bind(projectId)
-		: db.prepare(`${baseQuery} ORDER BY c.updated_at DESC`);
+		? db
+				.prepare(
+					`${baseQuery} WHERE c.project_id = ? GROUP BY c.id ORDER BY c.updated_at DESC`,
+				)
+				.bind(projectId)
+		: db.prepare(`${baseQuery} GROUP BY c.id ORDER BY c.updated_at DESC`);
 
 	const { results } = await statement.all();
 
@@ -52,13 +54,8 @@ export async function getConversations(
 		summary: row.summary || undefined,
 		summaryUpdatedAt: row.summary_updated_at ?? undefined,
 		summaryMessageCount: row.summary_message_count ?? undefined,
-		messages: JSON.parse(row.messages || "[]").map((message: any) => ({
-			...message,
-			meta:
-				typeof message.meta === "string"
-					? JSON.parse(message.meta || "null") ?? undefined
-					: message.meta ?? undefined,
-		})),
+		messageCount: Number(row.message_count || 0),
+		messages: [],
 	}));
 }
 
@@ -129,6 +126,47 @@ export async function getConversation(
 					? JSON.parse(message.meta || "null") ?? undefined
 					: message.meta ?? undefined,
 		})),
+	};
+}
+
+export interface ProjectUsageTotals {
+	promptTokens: number;
+	completionTokens: number;
+	totalTokens: number;
+	credits: number;
+	conversations: number;
+	messages: number;
+}
+
+export async function getProjectUsageTotals(
+	db: D1Database,
+	projectId: string,
+): Promise<ProjectUsageTotals> {
+	const { results } = await db
+		.prepare(
+			`SELECT
+				COUNT(DISTINCT c.id) as conversations,
+				COUNT(m.id) as messages,
+				SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.promptTokens'), 0) ELSE 0 END) as promptTokens,
+				SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.completionTokens'), 0) ELSE 0 END) as completionTokens,
+				SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.usage.totalTokens'), 0) ELSE 0 END) as totalTokens,
+				SUM(CASE WHEN json_valid(m.meta) THEN COALESCE(json_extract(m.meta, '$.credits'), 0) ELSE 0 END) as credits
+			FROM conversations c
+			LEFT JOIN messages m ON m.conversation_id = c.id
+			WHERE c.project_id = ?`,
+		)
+		.bind(projectId)
+		.all();
+
+	const row = (results && results[0]) as any;
+
+	return {
+		promptTokens: Number(row?.promptTokens || 0),
+		completionTokens: Number(row?.completionTokens || 0),
+		totalTokens: Number(row?.totalTokens || 0),
+		credits: Number(row?.credits || 0),
+		conversations: Number(row?.conversations || 0),
+		messages: Number(row?.messages || 0),
 	};
 }
 
@@ -340,6 +378,14 @@ export async function initDatabase(db: D1Database): Promise<void> {
 		)
 		.run();
 
+	// Normalize default project name if legacy data exists.
+	await db
+		.prepare(
+			"UPDATE projects SET name = ?, description = ?, updated_at = ? WHERE id = 'default' AND name IN ('Default', '模型选择')",
+		)
+		.bind("默认项目", "默认工作区", Date.now())
+		.run();
+
 	// Best-effort migrations for existing schemas
 	try {
 		await db.prepare("ALTER TABLE conversations ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'").run();
@@ -391,6 +437,22 @@ export async function initDatabase(db: D1Database): Promise<void> {
 		.run();
 
 	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
+		)
+		.run();
+
+	await db
+		.prepare("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)")
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_messages_role_timestamp ON messages(role, timestamp)",
+		)
+		.run();
+
+	await db
 		.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
 		.run();
 
@@ -398,7 +460,7 @@ export async function initDatabase(db: D1Database): Promise<void> {
 	await db
 		.prepare(
 			`INSERT OR IGNORE INTO projects (id, name, description, created_at, updated_at)
-			VALUES ('default', '模型选择', '默认工作区', ?, ?)`,
+			VALUES ('default', '默认项目', '默认工作区', ?, ?)`,
 		)
 		.bind(Date.now(), Date.now())
 		.run();

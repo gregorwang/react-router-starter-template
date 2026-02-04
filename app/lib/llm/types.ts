@@ -25,6 +25,7 @@ export interface Conversation {
 	id: ConversationId;
 	title: string;
 	messages: Message[];
+	messageCount?: number;
 	provider: LLMProvider;
 	model: string;
 	projectId?: string;
@@ -37,6 +38,8 @@ export interface Conversation {
 	enableThinking?: boolean;
 	thinkingBudget?: number;
 	thinkingLevel?: "low" | "medium" | "high";
+	outputTokens?: number;
+	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
 }
 
@@ -64,14 +67,15 @@ export interface MessageMeta {
 	thinkingMs?: number;
 	webSearch?: {
 		provider: "x" | "xai";
-		query: string;
-		results: Array<{
+		query?: string;
+		results?: Array<{
 			id?: string;
 			author?: string;
 			text: string;
 			url?: string;
 			createdAt?: string;
 		}>;
+		citations?: string[];
 	};
 }
 

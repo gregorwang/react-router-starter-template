@@ -53,11 +53,11 @@ export async function createProject(
 export async function ensureDefaultProject(db: D1Database): Promise<Project> {
 	const existing = await getProject(db, "default");
 	if (existing) {
-		if (existing.name === "Default") {
+		if (existing.name === "Default" || existing.name === "模型选择") {
 			const now = Date.now();
 			const updated: Project = {
 				...existing,
-				name: "模型选择",
+				name: "默认项目",
 				description: "默认工作区",
 				updatedAt: now,
 			};
@@ -80,7 +80,7 @@ export async function ensureDefaultProject(db: D1Database): Promise<Project> {
 	const now = Date.now();
 	const project: Project = {
 		id: "default",
-		name: "模型选择",
+		name: "默认项目",
 		description: "默认工作区",
 		createdAt: now,
 		updatedAt: now,

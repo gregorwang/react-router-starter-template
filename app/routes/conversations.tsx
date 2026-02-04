@@ -2,23 +2,34 @@ import type { Route } from "./+types/conversations";
 import { Link, useFetcher, useNavigate, useSearchParams } from "react-router";
 import { useCallback, useEffect } from "react";
 import { format } from "date-fns";
-import { getConversations } from "../lib/db/conversations.server";
-import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
+import {
+	getConversations,
+	getProjectUsageTotals,
+} from "../lib/db/conversations.server";
+import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, request }: Route.LoaderArgs) {
 	await requireAuth(request, context.db);
-	await ensureDefaultProject(context.db);
 	const projects = await getProjects(context.db);
 	const url = new URL(request.url);
 	const requestedProjectId = url.searchParams.get("project");
 	const activeProjectId =
 		requestedProjectId || projects[0]?.id || "default";
 
-	const conversations = await getConversations(context.db, activeProjectId);
-	const usageTotals = summarizeUsage(conversations);
-	return { conversations, projects, activeProjectId, usageTotals };
+	const [conversations, usageTotals] = await Promise.all([
+		getConversations(context.db, activeProjectId),
+		getProjectUsageTotals(context.db, activeProjectId),
+	]);
+	return Response.json(
+		{ conversations, projects, activeProjectId, usageTotals },
+		{
+			headers: {
+				"Cache-Control": "private, max-age=10, stale-while-revalidate=30",
+			},
+		},
+	);
 }
 
 export default function Conversations({ loaderData }: Route.ComponentProps) {
@@ -133,7 +144,7 @@ export default function Conversations({ loaderData }: Route.ComponentProps) {
 							conversationId={conv.id}
 							projectId={activeProjectId}
 							title={conv.title}
-							messageCount={conv.messages.length}
+							messageCount={conv.messageCount ?? conv.messages.length}
 							updatedAt={conv.updatedAt}
 						/>
 					))}
@@ -197,36 +208,4 @@ function ConversationRow({
 			</div>
 		</div>
 	);
-}
-
-function summarizeUsage(conversations: Array<{ messages: Array<{ meta?: any }> }>) {
-	let promptTokens = 0;
-	let completionTokens = 0;
-	let totalTokens = 0;
-	let credits = 0;
-	let messages = 0;
-
-	for (const conversation of conversations) {
-		for (const message of conversation.messages) {
-			messages += 1;
-			const usage = message.meta?.usage;
-			if (usage) {
-				promptTokens += usage.promptTokens || 0;
-				completionTokens += usage.completionTokens || 0;
-				totalTokens += usage.totalTokens || 0;
-			}
-			if (message.meta?.credits) {
-				credits += message.meta.credits;
-			}
-		}
-	}
-
-	return {
-		promptTokens,
-		completionTokens,
-		totalTokens,
-		credits,
-		conversations: conversations.length,
-		messages,
-	};
 }

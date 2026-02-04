@@ -33,7 +33,7 @@ export function SidebarItem({
 			<fetcher.Form
 				method="post"
 				action="/conversations/delete"
-				className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+				className="absolute right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity"
 			>
 				<input type="hidden" name="conversationId" value={conversation.id} />
 				<input
@@ -44,7 +44,7 @@ export function SidebarItem({
 				<button
 					type="submit"
 					disabled={isDeleting}
-					className="p-1 text-neutral-400 hover:text-rose-500 rounded transition-colors"
+					className="p-2 md:p-1 text-neutral-400 hover:text-rose-500 rounded transition-colors"
 					title="删除对话"
 					onClick={(e) => {
 						if (!confirm("确定要删除这条对话吗？")) {

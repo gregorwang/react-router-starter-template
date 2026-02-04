@@ -17,6 +17,7 @@ const requestHandler = createRequestHandler(
 );
 
 let dbInitPromise: Promise<void> | null = null;
+const MANIFEST_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 async function ensureDatabase(env: Env) {
 	if (!dbInitPromise) {
@@ -28,6 +29,30 @@ async function ensureDatabase(env: Env) {
 export default {
 	async fetch(request, env, ctx) {
 		await ensureDatabase(env);
+		const url = new URL(request.url);
+		if (request.method === "GET" && url.pathname === "/__manifest") {
+			const cache = caches.default;
+			const cacheKey = new Request(request.url, { method: "GET" });
+			const cached = await cache.match(cacheKey);
+			if (cached) {
+				return cached;
+			}
+
+			const response = await requestHandler(request, {
+				cloudflare: { env, ctx },
+				db: env.DB,
+			});
+
+			if (response.ok) {
+				const cacheable = new Response(response.body, response);
+				cacheable.headers.set("Cache-Control", MANIFEST_CACHE_CONTROL);
+				ctx.waitUntil(cache.put(cacheKey, cacheable.clone()));
+				return cacheable;
+			}
+
+			return response;
+		}
+
 		return requestHandler(request, {
 			cloudflare: { env, ctx },
 			db: env.DB,

@@ -10,6 +10,7 @@ import {
 import type { Route } from "./+types/root";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ChatProvider } from "./contexts/ChatContext";
+import { RouteProgress } from "./components/layout/RouteProgress";
 
 import "./app.css";
 
@@ -48,6 +49,7 @@ export default function App() {
 	return (
 		<ThemeProvider>
 			<ChatProvider>
+				<RouteProgress />
 				<Outlet />
 			</ChatProvider>
 		</ThemeProvider>

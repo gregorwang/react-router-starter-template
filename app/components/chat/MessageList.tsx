@@ -3,7 +3,7 @@ import { useChat } from "../../hooks/useChat";
 import { MessageBubble } from "./MessageBubble";
 
 export function MessageList() {
-	const { currentConversation } = useChat();
+	const { currentConversation, isStreaming } = useChat();
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const [isAtBottom, setIsAtBottom] = useState(true);
 
@@ -50,6 +50,9 @@ export function MessageList() {
 		);
 	}
 
+	const lastMessageId =
+		currentConversation.messages[currentConversation.messages.length - 1]?.id;
+
 	return (
 		<div className="relative h-full min-h-0">
 			<div
@@ -60,6 +63,7 @@ export function MessageList() {
 					<MessageBubble
 						key={message.id}
 						message={message}
+						isStreaming={isStreaming && message.id === lastMessageId}
 						modelName={
 							message.role === "assistant"
 								? message.meta?.model ?? currentConversation.model

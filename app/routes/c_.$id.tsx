@@ -7,36 +7,47 @@ import { useChat } from "../contexts/ChatContext";
 import {
 	getConversation,
 	getConversationIndex,
-	saveConversation,
 } from "../lib/db/conversations.server";
-import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
-import type { Conversation } from "../lib/llm/types";
+import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, params, request }: Route.LoaderArgs) {
 	await requireAuth(request, context.db);
 	const conversationId = params.id;
-	await ensureDefaultProject(context.db);
-	const projects = await getProjects(context.db);
 	const env = context.cloudflare.env;
 	const url = new URL(request.url);
 	const requestedProjectId = url.searchParams.get("project");
-	const fallbackProjectId = requestedProjectId || projects[0]?.id || "default";
+	const projectsPromise = getProjects(context.db);
 
 	if (conversationId === "new") {
+		const projects = await projectsPromise;
+		const fallbackProjectId = requestedProjectId || projects[0]?.id || "default";
 		const newId = crypto.randomUUID();
 		return redirect(`/c/${newId}?project=${fallbackProjectId}`);
 	}
 
-	let conversation = await getConversation(context.db, conversationId);
+	if (!conversationId) {
+		const projects = await projectsPromise;
+		const fallbackProjectId = requestedProjectId || projects[0]?.id || "default";
+		const newId = crypto.randomUUID();
+		return redirect(`/c/${newId}?project=${fallbackProjectId}`);
+	}
+
+	const [projects, existingConversation] = await Promise.all([
+		projectsPromise,
+		getConversation(context.db, conversationId),
+	]);
+	const fallbackProjectId = requestedProjectId || projects[0]?.id || "default";
+
+	let conversation = existingConversation;
+	let isPlaceholder = false;
 
 	// If conversation doesn't exist, create a new one
 	if (!conversation) {
-		const projectId = fallbackProjectId;
 		conversation = {
 			id: conversationId,
-			projectId,
+			projectId: fallbackProjectId,
 			title: "新对话",
 			provider: "deepseek",
 			model: "deepseek-chat",
@@ -44,12 +55,18 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 			updatedAt: Date.now(),
 			messages: [],
 		};
-		await saveConversation(context.db, conversation);
+		isPlaceholder = true;
 	}
 
 	const activeProjectId =
 		conversation.projectId || requestedProjectId || projects[0]?.id || "default";
 	const conversations = await getConversationIndex(context.db, activeProjectId);
+	if (isPlaceholder && !conversations.some((item) => item.id === conversation?.id)) {
+		conversations.unshift({
+			...conversation,
+			messages: [],
+		});
+	}
 
 	return {
 		conversationId,
@@ -73,13 +90,17 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const location = useLocation();
 	const [searchParams] = useSearchParams();
 	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const { setCurrentConversation } = useChat();
 	const { conversationId, conversation, conversations, projects, activeProjectId } =
 		loaderData;
 	const providerAvailability = loaderData.providerAvailability;
 
 	const activeProjectName = useMemo(
-		() => projects.find((project) => project.id === activeProjectId)?.name || "项目",
+		() => {
+			if (activeProjectId === "default") return "模型选择";
+			return projects.find((project) => project.id === activeProjectId)?.name || "项目";
+		},
 		[projects, activeProjectId],
 	);
 
@@ -151,11 +172,14 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 				onProjectChange={handleProjectChange}
 				onNewProject={handleCreateProject}
 				isOpen={sidebarOpen}
+				isCollapsed={sidebarCollapsed}
 				onClose={() => setSidebarOpen(false)}
 				className="fixed md:static inset-y-0 left-0 z-40"
 			/>
 			<ChatContainer
 				onOpenSidebar={() => setSidebarOpen(true)}
+				onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+				isSidebarCollapsed={sidebarCollapsed}
 				activeProjectName={activeProjectName}
 				providerAvailability={providerAvailability}
 			/>
