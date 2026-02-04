@@ -41,6 +41,8 @@ export async function streamLLMFromServer(
 		xai: env.XAI_API_KEY,
 		poe: env.POE_API_KEY,
 		"workers-ai": undefined,
+		poloai: env.POLOAI_API_KEY,
+		ark: env.ARK_API_KEY,
 	};
 
 	const apiKey = apiKeyMap[provider];
@@ -104,6 +106,14 @@ export async function streamLLMFromServer(
 					break;
 				case "workers-ai":
 					await streamWorkersAIServer(requestMessages, model, context, writeEvent);
+					break;
+				case "poloai":
+					await streamPoloAIServer(requestMessages, model, apiKey!, writeEvent);
+					break;
+				case "ark":
+					await streamArkServer(requestMessages, model, apiKey!, writeEvent, {
+						enableThinking: options?.enableThinking,
+					});
 					break;
 			}
 		} catch (error) {
@@ -331,6 +341,151 @@ async function streamWorkersAIServer(
 	}
 }
 
+async function streamPoloAIServer(
+	messages: LLMMessage[],
+	model: string,
+	apiKey: string,
+	writeEvent: (event: LLMStreamEvent) => Promise<void>,
+): Promise<void> {
+	const response = await fetch("https://poloai.top/v1/messages", {
+		method: "POST",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+			Authorization: apiKey,
+		},
+		body: JSON.stringify({
+			model,
+			messages: messages.map((message) => ({
+				role: message.role,
+				content: message.content,
+			})),
+			stream: true,
+			max_tokens: 1024,
+		}),
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`PoloAI API error: ${response.status} - ${errorText}`);
+	}
+
+	const contentType = response.headers.get("Content-Type") || "";
+	if (!contentType.includes("text/event-stream")) {
+		const data = (await response.json()) as any;
+		const content = extractPoloAIContent(data);
+		const usage = normalizeUsage(data?.usage);
+		if (content) {
+			await writeEvent({ type: "delta", content });
+		}
+		if (usage) {
+			await writeEvent({ type: "usage", usage });
+		}
+		return;
+	}
+
+	await processSSEStream(response, async (parsed) => {
+		if (parsed?.error?.message) {
+			throw new Error(parsed.error.message);
+		}
+		const content = extractPoloAIContent(parsed);
+		const usage = normalizeUsage(parsed?.usage);
+		if (content) {
+			await writeEvent({ type: "delta", content });
+		}
+		if (usage) {
+			await writeEvent({ type: "usage", usage });
+		}
+	});
+}
+
+async function streamArkServer(
+	messages: LLMMessage[],
+	model: string,
+	apiKey: string,
+	writeEvent: (event: LLMStreamEvent) => Promise<void>,
+	options?: { enableThinking?: boolean },
+): Promise<void> {
+	const body: Record<string, unknown> = {
+		model,
+		max_tokens: 1000,
+		messages: messages.map((message) => ({
+			role: message.role,
+			content: message.content,
+		})),
+		stream: true,
+	};
+	if (options?.enableThinking !== false) {
+		body.thinking = { type: "enabled" };
+	}
+
+	const response = await fetch(
+		"https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions",
+		{
+			method: "POST",
+			headers: {
+				Accept: "application/json",
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${apiKey}`,
+			},
+			body: JSON.stringify(body),
+		},
+	);
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Ark API error: ${response.status} - ${errorText}`);
+	}
+
+	const contentType = response.headers.get("Content-Type") || "";
+	if (!contentType.includes("text/event-stream")) {
+		const data = (await response.json()) as any;
+		const content = extractOpenAIContent(data);
+		const usage = normalizeUsage(data?.usage);
+		if (content) {
+			await writeEvent({ type: "delta", content });
+		}
+		if (usage) {
+			await writeEvent({ type: "usage", usage });
+		}
+		return;
+	}
+
+	await processSSEStream(response, async (parsed) => {
+		if (parsed?.error?.message) {
+			throw new Error(parsed.error.message);
+		}
+		const content = extractOpenAIDelta(parsed);
+		const usage = normalizeUsage(parsed?.usage);
+		if (content) {
+			await writeEvent({ type: "delta", content });
+		}
+		if (usage) {
+			await writeEvent({ type: "usage", usage });
+		}
+	});
+}
+
+function extractOpenAIDelta(payload: any): string | undefined {
+	const delta = payload?.choices?.[0]?.delta;
+	const content = delta?.content ?? delta?.text;
+	return typeof content === "string" ? content : undefined;
+}
+
+function extractOpenAIContent(payload: any): string | undefined {
+	const message = payload?.choices?.[0]?.message;
+	if (typeof message?.content === "string") {
+		return message.content;
+	}
+	if (Array.isArray(message?.content)) {
+		return message.content
+			.map((block: any) => (typeof block?.text === "string" ? block.text : ""))
+			.join("");
+	}
+	return undefined;
+}
+
+
 // Helper to process SSE streams
 async function processSSEStream(
 	response: Response,
@@ -354,8 +509,8 @@ async function processSSEStream(
 		buffer = lines.pop() || "";
 
 		for (const line of lines) {
-			if (line.startsWith("data: ")) {
-				const data = line.slice(6).trim();
+			if (line.startsWith("data:")) {
+				const data = line.slice(5).trim();
 				if (data === "[DONE]") break;
 
 				try {
@@ -379,14 +534,52 @@ function normalizeUsage(usage: any): Usage | undefined {
 	const promptTokens = usage.prompt_tokens ?? usage.promptTokens;
 	const completionTokens = usage.completion_tokens ?? usage.completionTokens;
 	const totalTokens = usage.total_tokens ?? usage.totalTokens;
+	const inputTokens = usage.input_tokens ?? usage.inputTokens;
+	const outputTokens = usage.output_tokens ?? usage.outputTokens;
 	if (
 		typeof promptTokens !== "number" ||
 		typeof completionTokens !== "number" ||
 		typeof totalTokens !== "number"
 	) {
+		if (typeof inputTokens === "number" && typeof outputTokens === "number") {
+			return {
+				promptTokens: inputTokens,
+				completionTokens: outputTokens,
+				totalTokens: inputTokens + outputTokens,
+			};
+		}
 		return undefined;
 	}
 	return { promptTokens, completionTokens, totalTokens };
+}
+
+function extractPoloAIContent(payload: any): string | undefined {
+	const choice = payload?.choices?.[0];
+	const delta = choice?.delta;
+	const openAIDelta =
+		delta?.content ??
+		delta?.text ??
+		payload?.delta?.text ??
+		payload?.delta?.content ??
+		payload?.content_block?.text;
+	if (typeof openAIDelta === "string") {
+		return openAIDelta;
+	}
+
+	const messageContent = choice?.message?.content;
+	if (typeof messageContent === "string") {
+		return messageContent;
+	}
+
+	const contentBlocks = payload?.content ?? payload?.message?.content;
+	if (Array.isArray(contentBlocks)) {
+		const text = contentBlocks
+			.map((block: any) => (typeof block?.text === "string" ? block.text : ""))
+			.join("");
+		return text || undefined;
+	}
+
+	return undefined;
 }
 
 async function maybeInjectXSearch(

@@ -6,7 +6,7 @@ import { redirect, useLocation, useNavigate, useSearchParams } from "react-route
 import { useChat } from "../contexts/ChatContext";
 import {
 	getConversation,
-	getConversations,
+	getConversationIndex,
 	saveConversation,
 } from "../lib/db/conversations.server";
 import { ensureDefaultProject, getProjects } from "../lib/db/projects.server";
@@ -49,7 +49,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 	const activeProjectId =
 		conversation.projectId || requestedProjectId || projects[0]?.id || "default";
-	const conversations = await getConversations(context.db, activeProjectId);
+	const conversations = await getConversationIndex(context.db, activeProjectId);
 
 	return {
 		conversationId,
@@ -62,6 +62,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 			xai: Boolean(env.XAI_API_KEY),
 			poe: Boolean(env.POE_API_KEY),
 			"workers-ai": Boolean(env.AI),
+			poloai: Boolean(env.POLOAI_API_KEY),
+			ark: Boolean(env.ARK_API_KEY),
 		},
 	};
 }

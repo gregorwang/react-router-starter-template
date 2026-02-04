@@ -214,6 +214,18 @@ export function ChatContainer({
 						</label>
 					)}
 
+					{currentConversation?.provider === "ark" && (
+						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
+							<input
+								type="checkbox"
+								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+								checked={currentConversation.enableThinking ?? true}
+								onChange={(e) => setCurrentConversation({ ...currentConversation, enableThinking: e.target.checked })}
+							/>
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">思考</span>
+						</label>
+					)}
+
 					{currentConversation?.model === "claude-sonnet-4.5" && (
 						<div className="flex items-center gap-2 ml-2">
 							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">思考预算：</span>

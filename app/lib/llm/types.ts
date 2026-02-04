@@ -1,4 +1,10 @@
-export type LLMProvider = "deepseek" | "xai" | "poe" | "workers-ai";
+export type LLMProvider =
+	| "deepseek"
+	| "xai"
+	| "poe"
+	| "workers-ai"
+	| "poloai"
+	| "ark";
 
 export interface LLMMessage {
 	role: "user" | "assistant" | "system";
@@ -50,6 +56,8 @@ export interface Usage {
 }
 
 export interface MessageMeta {
+	model?: string;
+	provider?: LLMProvider;
 	usage?: Usage;
 	credits?: number;
 	reasoning?: string;
@@ -72,6 +80,8 @@ export const PROVIDER_NAMES: Record<LLMProvider, string> = {
 	xai: "xAI",
 	poe: "Poe",
 	"workers-ai": "Workers AI",
+	poloai: "PoloAI",
+	ark: "火山方舟",
 };
 
 export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
@@ -93,4 +103,11 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 		"@cf/meta/llama-3.1-70b-instruct",
 		"@cf/qwen/qwen1.5-7b-chat",
 	],
+	poloai: [
+		"claude-opus-4-5-20251101-thinking",
+		"claude-sonnet-4-5-20250929-thinking",
+		"claude-sonnet-4-5-20250929",
+		"claude-haiku-4-5-20251001-thinking",
+	],
+	ark: ["ark-code-latest"],
 };

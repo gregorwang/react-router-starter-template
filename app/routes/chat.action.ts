@@ -188,6 +188,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 						role: "user" as const,
 						content: lastMessage.content,
 						timestamp: Date.now(),
+						meta: {
+							model,
+							provider,
+						},
 					};
 					const assistantMessage = {
 						id: assistantMessageId,
@@ -195,6 +199,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 						content: fullContent,
 						timestamp: Date.now(),
 						meta: {
+							model,
+							provider,
 							usage,
 							credits,
 							reasoning: reasoning || undefined,
@@ -262,7 +268,14 @@ function validateChatActionData(data: ChatActionData): string | null {
 	if (data.messages.length > MAX_MESSAGES) {
 		return "Too many messages";
 	}
-	const allowedProviders: LLMProvider[] = ["deepseek", "xai", "poe", "workers-ai"];
+	const allowedProviders: LLMProvider[] = [
+		"deepseek",
+		"xai",
+		"poe",
+		"workers-ai",
+		"poloai",
+		"ark",
+	];
 	if (!allowedProviders.includes(data.provider)) {
 		return "Unsupported provider";
 	}
