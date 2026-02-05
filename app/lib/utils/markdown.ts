@@ -107,14 +107,14 @@ async function ensureMarked() {
 		const renderer = new Renderer();
 		void getHighlighter();
 		renderer.html = () => "";
-		renderer.link = (href, title, text) => {
-			const safeHref = sanitizeLink(href);
+		renderer.link = ({ href, title, text }) => {
+			const safeHref = sanitizeLink(href ?? "");
 			const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
 			const external =
 				safeHref.startsWith("http://") || safeHref.startsWith("https://");
 			const rel = external ? ' rel="noopener noreferrer"' : "";
 			const target = external ? ' target="_blank"' : "";
-			return `<a href="${escapeHtml(safeHref)}"${titleAttr}${rel}${target}>${text}</a>`;
+			return `<a href="${escapeHtml(safeHref)}"${titleAttr}${rel}${target}>${text ?? ""}</a>`;
 		};
 		renderer.code = (code: { text: string; lang?: string }) => {
 			const highlighter = highlighterInstance;

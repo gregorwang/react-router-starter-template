@@ -9,12 +9,13 @@ export interface UsageStats {
 export async function getUsageStats(
 	db: D1Database,
 	options: {
+		userId: string;
 		startMs: number;
 		endMs: number;
 		projectId?: string;
 	},
 ): Promise<UsageStats> {
-	const { startMs, endMs, projectId } = options;
+	const { userId, startMs, endMs, projectId } = options;
 
 	let query = `
 		SELECT
@@ -35,6 +36,8 @@ export async function getUsageStats(
 	`;
 
 	const params: Array<string | number> = [startMs, endMs];
+	query += " AND c.user_id = ?";
+	params.push(userId);
 	if (projectId) {
 		query += " AND c.project_id = ?";
 		params.push(projectId);

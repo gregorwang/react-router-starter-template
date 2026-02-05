@@ -3,7 +3,7 @@ import { createProject, getProject } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	await requireAuth(request, context.db);
+	const user = await requireAuth(request, context.db);
 	if (request.method !== "POST") {
 		return new Response("Method not allowed", { status: 405 });
 	}
@@ -32,10 +32,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		id,
 		name,
 		description: description || undefined,
+		userId: user.id,
 		createdAt: now,
 		updatedAt: now,
 	});
 
-	const project = await getProject(context.db, id);
+	const project = await getProject(context.db, id, user.id);
 	return Response.json({ ok: true, project });
 }

@@ -19,19 +19,29 @@ const requestHandler = createRequestHandler(
 let dbInitPromise: Promise<void> | null = null;
 const MANIFEST_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
+function setD1LogFlag(env: Env) {
+	const raw = String(env.D1_LOG || "")
+		.trim()
+		.toLowerCase();
+	const enabled = raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+	(globalThis as { __D1_LOG__?: boolean }).__D1_LOG__ = enabled;
+}
+
 async function ensureDatabase(env: Env) {
 	if (!dbInitPromise) {
-		dbInitPromise = initDatabase(env.DB);
+		dbInitPromise = initDatabase(env.DB, env);
 	}
 	return dbInitPromise;
 }
 
 export default {
 	async fetch(request, env, ctx) {
+		setD1LogFlag(env);
 		await ensureDatabase(env);
 		const url = new URL(request.url);
 		if (request.method === "GET" && url.pathname === "/__manifest") {
-			const cache = caches.default;
+			const cacheStorage = caches as CacheStorage & { default?: Cache };
+			const cache = cacheStorage.default ?? (await cacheStorage.open("manifest"));
 			const cacheKey = new Request(request.url, { method: "GET" });
 			const cached = await cache.match(cacheKey);
 			if (cached) {

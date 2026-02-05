@@ -1,10 +1,11 @@
 import type { Route } from "./+types/conversations.delete";
 import { deleteConversation } from "../lib/db/conversations.server";
+import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
 import { redirect } from "react-router";
 import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	await requireAuth(request, context.db);
+	const user = await requireAuth(request, context.db);
 	if (request.method !== "POST" && request.method !== "DELETE") {
 		return new Response("Method not allowed", { status: 405 });
 	}
@@ -26,7 +27,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("Conversation ID is required", { status: 400 });
 	}
 
-	await deleteConversation(context.db, conversationId);
+	await deleteConversation(context.db, user.id, conversationId);
+	if (context.cloudflare.env.SETTINGS_KV && projectId) {
+		await invalidateConversationCaches(
+			context.cloudflare.env.SETTINGS_KV,
+			user.id,
+			projectId,
+		);
+	}
 
 	return redirect(projectId ? `/c/new?project=${projectId}` : "/c/new");
 }

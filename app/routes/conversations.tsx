@@ -3,24 +3,42 @@ import { Link, useFetcher, useNavigate, useSearchParams } from "react-router";
 import { useCallback, useEffect } from "react";
 import { format } from "date-fns";
 import {
-	getConversations,
 	getProjectUsageTotals,
 } from "../lib/db/conversations.server";
+import { getConversationsCached } from "../lib/cache/conversation-index.server";
 import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
+import type { ProjectUsageTotals } from "../lib/db/conversations.server";
+import type { Conversation, Project } from "../lib/llm/types";
+
+type LoaderData = {
+	conversations: Conversation[];
+	projects: Project[];
+	activeProjectId: string;
+	usageTotals: ProjectUsageTotals;
+};
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, request }: Route.LoaderArgs) {
-	await requireAuth(request, context.db);
-	const projects = await getProjects(context.db);
+	const user = await requireAuth(request, context.db);
+	const projects = await getProjects(context.db, user.id);
 	const url = new URL(request.url);
 	const requestedProjectId = url.searchParams.get("project");
+	const projectIds = new Set(projects.map((project) => project.id));
 	const activeProjectId =
-		requestedProjectId || projects[0]?.id || "default";
+		(requestedProjectId && projectIds.has(requestedProjectId)
+			? requestedProjectId
+			: projects[0]?.id) || "default";
 
 	const [conversations, usageTotals] = await Promise.all([
-		getConversations(context.db, activeProjectId),
-		getProjectUsageTotals(context.db, activeProjectId),
+		getConversationsCached({
+			db: context.db,
+			kv: context.cloudflare.env.SETTINGS_KV,
+			ctx: context.cloudflare.ctx,
+			userId: user.id,
+			projectId: activeProjectId,
+		}),
+		getProjectUsageTotals(context.db, user.id, activeProjectId),
 	]);
 	return Response.json(
 		{ conversations, projects, activeProjectId, usageTotals },
@@ -32,7 +50,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 	);
 }
 
-export default function Conversations({ loaderData }: Route.ComponentProps) {
+export default function Conversations({ loaderData }: { loaderData: LoaderData }) {
 	const { conversations, projects, activeProjectId, usageTotals } = loaderData;
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();

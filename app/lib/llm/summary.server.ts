@@ -1,9 +1,9 @@
 export async function summarizeConversation({
-	ai,
+	env,
 	baseSummary,
 	messages,
 }: {
-	ai: Ai;
+	env: Env;
 	baseSummary: string;
 	messages: Array<{ role: string; content: string }>;
 }) {
@@ -27,7 +27,49 @@ export async function summarizeConversation({
 			: `\n对话内容：\n${clippedTranscript}`,
 	].join("\n");
 
-	const result = (await ai.run("@cf/meta/llama-3.1-8b-instruct" as any, {
+	const summaryProvider = (env.SUMMARY_PROVIDER || "").toLowerCase();
+	const usePoe = summaryProvider === "poe" || (!summaryProvider && env.POE_API_KEY);
+
+	if (usePoe) {
+		if (!env.POE_API_KEY) {
+			throw new Error("POE_API_KEY not configured");
+		}
+		const summaryModel = env.SUMMARY_MODEL || "gpt-4o-mini";
+		const response = await fetch("https://api.poe.com/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${env.POE_API_KEY}`,
+			},
+			body: JSON.stringify({
+				model: summaryModel,
+				messages: [{ role: "user", content: prompt }],
+				stream: false,
+			}),
+		});
+		if (!response.ok) {
+			const errorText = await response.text();
+			throw new Error(`Poe API error: ${response.status} - ${errorText}`);
+		}
+		const data = (await response.json()) as {
+			choices?: Array<{
+				message?: { content?: string };
+				content?: string;
+				text?: string;
+			}>;
+		};
+		const content =
+			data.choices?.[0]?.message?.content ||
+			data.choices?.[0]?.content ||
+			data.choices?.[0]?.text;
+		return content?.trim();
+	}
+
+	if (!env.AI) {
+		throw new Error("Workers AI binding not configured");
+	}
+
+	const result = (await env.AI.run("@cf/meta/llama-3.1-8b-instruct" as any, {
 		prompt,
 	})) as { response?: string };
 

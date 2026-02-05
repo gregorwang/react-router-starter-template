@@ -12,6 +12,7 @@ interface SidebarProps {
 	activeProjectId?: string;
 	onProjectChange?: (projectId: string) => void;
 	onNewProject?: () => void;
+	isAdmin?: boolean;
 	isOpen?: boolean;
 	isCollapsed?: boolean;
 	onClose?: () => void;
@@ -25,6 +26,7 @@ export function Sidebar({
 	activeProjectId,
 	onProjectChange,
 	onNewProject,
+	isAdmin = false,
 	isOpen = true,
 	isCollapsed = false,
 	onClose,
@@ -141,6 +143,21 @@ export function Sidebar({
 							用量
 						</Link>
 					</li>
+					{isAdmin && (
+						<li>
+							<Link
+								to="/admin"
+								className={cn(
+									"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
+									isActive("/admin")
+										? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
+										: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
+								)}
+							>
+								管理面板
+							</Link>
+						</li>
+					)}
 
 					<li>
 						<Form method="post" action="/logout">

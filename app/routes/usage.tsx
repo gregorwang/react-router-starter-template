@@ -4,8 +4,17 @@ import { useCallback } from "react";
 import { getUsageStats } from "../lib/db/usage.server";
 import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
+import type { UsageStats } from "../lib/db/usage.server";
+import type { Project } from "../lib/llm/types";
 
 type RangeKey = "today" | "7d" | "30d";
+type LoaderData = UsageStats & {
+	range: RangeKey;
+	label: string;
+	projects: Project[];
+	activeProjectId: string;
+	error?: string;
+};
 
 const RANGE_LABELS: Record<RangeKey, string> = {
 	today: "今日",
@@ -14,15 +23,19 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 };
 
 export async function loader({ context, request }: Route.LoaderArgs) {
-	await requireAuth(request, context.db);
-	const projectsPromise = getProjects(context.db);
-
+	const user = await requireAuth(request, context.db);
 	const url = new URL(request.url);
 	const rangeParam = url.searchParams.get("range") as RangeKey | null;
 	const range: RangeKey = rangeParam && rangeParam in RANGE_LABELS ? rangeParam : "today";
 	const projectIdParam = url.searchParams.get("project");
+	const projects = await getProjects(context.db, user.id);
+	const projectIds = new Set(projects.map((project) => project.id));
 	const projectId =
-		projectIdParam === "all" || !projectIdParam ? undefined : projectIdParam;
+		projectIdParam === "all" || !projectIdParam
+			? undefined
+			: projectIds.has(projectIdParam)
+				? projectIdParam
+				: undefined;
 
 	const now = new Date();
 	let startMs = now.getTime();
@@ -38,21 +51,19 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 	}
 
 	try {
-		const [projects, stats] = await Promise.all([
-			projectsPromise,
-			getUsageStats(context.db, {
-				startMs,
-				endMs: now.getTime(),
-				projectId,
-			}),
-		]);
+		const stats = await getUsageStats(context.db, {
+			userId: user.id,
+			startMs,
+			endMs: now.getTime(),
+			projectId,
+		});
 
 		return Response.json(
 			{
 				range,
 				label: RANGE_LABELS[range],
 				projects,
-				activeProjectId: projectIdParam || "all",
+				activeProjectId: projectIdParam && projectIds.has(projectIdParam) ? projectIdParam : "all",
 				...stats,
 			},
 			{
@@ -62,13 +73,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 			},
 		);
 	} catch (error) {
-		const projects = await projectsPromise;
 		return Response.json(
 			{
 				range,
 				label: RANGE_LABELS[range],
 				projects,
-				activeProjectId: projectIdParam || "all",
+				activeProjectId: projectIdParam && projectIds.has(projectIdParam) ? projectIdParam : "all",
 				promptTokens: 0,
 				completionTokens: 0,
 				totalTokens: 0,
@@ -85,7 +95,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 	}
 }
 
-export default function UsagePage({ loaderData }: Route.ComponentProps) {
+export default function UsagePage({ loaderData }: { loaderData: LoaderData }) {
 	const {
 		range,
 		label,
@@ -97,7 +107,7 @@ export default function UsagePage({ loaderData }: Route.ComponentProps) {
 		totalCalls,
 		models,
 		error,
-	} = loaderData as Route.ComponentProps["loaderData"] & { error?: string };
+	} = loaderData;
 
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();

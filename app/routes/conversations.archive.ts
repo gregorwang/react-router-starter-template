@@ -3,7 +3,7 @@ import { getConversation } from "../lib/db/conversations.server";
 import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	await requireAuth(request, context.db);
+	const user = await requireAuth(request, context.db);
 	if (request.method !== "POST") {
 		return new Response("Method not allowed", { status: 405 });
 	}
@@ -26,12 +26,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("Missing conversationId", { status: 400 });
 	}
 
-	const conversation = await getConversation(context.db, conversationId);
+	const conversation = await getConversation(context.db, user.id, conversationId);
 	if (!conversation) {
 		return new Response("Conversation not found", { status: 404 });
 	}
 
-	const key = `conversations/${conversationId}.json`;
+	const key = `conversations/${user.id}/${conversationId}.json`;
 	const body = JSON.stringify(conversation, null, 2);
 	await env.CHAT_ARCHIVE.put(key, body, {
 		httpMetadata: { contentType: "application/json" },
@@ -41,7 +41,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-	await requireAuth(request, context.db);
+	const user = await requireAuth(request, context.db);
 	const env = context.cloudflare.env;
 	if (!env.CHAT_ARCHIVE) {
 		return new Response("R2 binding not configured", { status: 500 });
@@ -51,12 +51,13 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 	const key = url.searchParams.get("key");
 	const conversationId = url.searchParams.get("conversationId");
 	const download = url.searchParams.get("download");
-	const resolvedKey = key || (conversationId ? `conversations/${conversationId}.json` : null);
+	const resolvedKey =
+		key || (conversationId ? `conversations/${user.id}/${conversationId}.json` : null);
 
 	if (!resolvedKey) {
 		return new Response("Missing key", { status: 400 });
 	}
-	if (!resolvedKey.startsWith("conversations/")) {
+	if (!resolvedKey.startsWith(`conversations/${user.id}/`)) {
 		return new Response("Invalid key", { status: 400 });
 	}
 	if (resolvedKey.includes("..")) {

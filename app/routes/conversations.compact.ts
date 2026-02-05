@@ -4,7 +4,7 @@ import { summarizeConversation } from "../lib/llm/summary.server";
 import { requireAuth } from "../lib/auth.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
-	await requireAuth(request, context.db);
+	const user = await requireAuth(request, context.db);
 	if (request.method !== "POST") {
 		return new Response("Method not allowed", { status: 405 });
 	}
@@ -34,7 +34,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("Missing conversationId", { status: 400 });
 	}
 
-	const conversation = await getConversation(context.db, conversationId);
+	const conversation = await getConversation(context.db, user.id, conversationId);
 	if (!conversation) {
 		return new Response("Conversation not found", { status: 404 });
 	}
@@ -45,7 +45,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const env = context.cloudflare.env;
-	if (!env.AI) {
+	const summaryProvider = (env.SUMMARY_PROVIDER || "").toLowerCase();
+	const wantsPoe = summaryProvider === "poe" || (!summaryProvider && env.POE_API_KEY);
+	if (wantsPoe && !env.POE_API_KEY) {
+		return new Response("POE_API_KEY not configured", { status: 500 });
+	}
+	if (!wantsPoe && !env.AI) {
 		return new Response("Workers AI binding not configured", { status: 500 });
 	}
 
@@ -85,14 +90,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 			null,
 			2,
 		);
-		archiveKey = `conversations/${conversationId}/compact-${now}.json`;
+		archiveKey = `conversations/${user.id}/${conversationId}/compact-${now}.json`;
 		await env.CHAT_ARCHIVE.put(archiveKey, archiveBody, {
 			httpMetadata: { contentType: "application/json" },
 		});
 	}
 
 	const summary = await summarizeConversation({
-		ai: env.AI,
+		env,
 		baseSummary,
 		messages: newMessages.length ? newMessages : messagesSource,
 	});
@@ -104,6 +109,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const summaryMessageCount = messagesSource.length;
 	await updateConversationSummary(
 		context.db,
+		user.id,
 		conversationId,
 		summary,
 		now,

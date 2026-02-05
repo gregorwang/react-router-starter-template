@@ -5,6 +5,8 @@ import {
 	deleteSession,
 	getSession,
 } from "./db/sessions.server";
+import { getUserById } from "./db/users.server";
+import type { User } from "./llm/types";
 
 const AUTH_COOKIE_NAME = "rr_auth";
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -31,9 +33,12 @@ function buildCookieBase(request: Request) {
 	return parts;
 }
 
-export async function requireAuth(request: Request, db: D1Database) {
-	const ok = await isAuthenticatedWithDb(request, db);
-	if (ok) return;
+export async function requireAuth(
+	request: Request,
+	db: D1Database,
+): Promise<User> {
+	const user = await getCurrentUser(request, db);
+	if (user) return user;
 	const url = new URL(request.url);
 	const redirectTo = `${url.pathname}${url.search}`;
 	throw redirect(`/login?redirect=${encodeURIComponent(redirectTo)}`);
@@ -72,22 +77,16 @@ export async function isAuthenticatedWithDb(
 	request: Request,
 	db: D1Database,
 ): Promise<boolean> {
-	const sessionId = getSessionId(request);
-	if (!sessionId) return false;
-	const session = await getSession(db, sessionId);
-	if (!session) return false;
-	if (session.expiresAt <= Date.now()) {
-		await deleteSession(db, sessionId);
-		return false;
-	}
-	return true;
+	const user = await getCurrentUser(request, db);
+	return Boolean(user);
 }
 
 export async function createAuthSession(
 	db: D1Database,
+	userId: string,
 ): Promise<{ sessionId: string }> {
 	await deleteExpiredSessions(db);
-	const session = await createSession(db, AUTH_COOKIE_MAX_AGE * 1000);
+	const session = await createSession(db, userId, AUTH_COOKIE_MAX_AGE * 1000);
 	return { sessionId: session.id };
 }
 
@@ -96,4 +95,31 @@ export async function destroySession(request: Request, db: D1Database) {
 	if (sessionId) {
 		await deleteSession(db, sessionId);
 	}
+}
+
+export async function getCurrentUser(
+	request: Request,
+	db: D1Database,
+): Promise<User | null> {
+	const sessionId = getSessionId(request);
+	if (!sessionId) return null;
+	const session = await getSession(db, sessionId);
+	if (!session) return null;
+	if (session.expiresAt <= Date.now()) {
+		await deleteSession(db, sessionId);
+		return null;
+	}
+	const user = await getUserById(db, session.userId);
+	return user ?? null;
+}
+
+export async function requireAdmin(
+	request: Request,
+	db: D1Database,
+): Promise<User> {
+	const user = await requireAuth(request, db);
+	if (user.role !== "admin") {
+		throw new Response("Forbidden", { status: 403 });
+	}
+	return user;
 }
