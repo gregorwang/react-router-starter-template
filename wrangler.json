@@ -43,6 +43,10 @@
 		{
 			"bucket_name": "llm-platform-archive-20260202",
 			"binding": "CHAT_ARCHIVE"
+		},
+		{
+			"bucket_name": "llm-platform-archive-20260202",
+			"binding": "CHAT_MEDIA"
 		}
 	],
 	"durable_objects": {

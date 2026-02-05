@@ -6,9 +6,20 @@ export type LLMProvider =
 	| "poloai"
 	| "ark";
 
+export interface ImageAttachment {
+	id: string;
+	mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+	data?: string;
+	name?: string;
+	size?: number;
+	url?: string;
+	r2Key?: string;
+}
+
 export interface LLMMessage {
 	role: "user" | "assistant" | "system";
 	content: string;
+	attachments?: ImageAttachment[];
 }
 
 export type ConversationId = string;
@@ -26,6 +37,7 @@ export interface Conversation {
 	title: string;
 	messages: Message[];
 	messageCount?: number;
+	userId?: string;
 	provider: LLMProvider;
 	model: string;
 	projectId?: string;
@@ -41,14 +53,28 @@ export interface Conversation {
 	outputTokens?: number;
 	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
+	enableTools?: boolean;
 }
 
 export interface Project {
 	id: string;
 	name: string;
 	description?: string;
+	userId?: string;
+	isDefault?: boolean;
 	createdAt: number;
 	updatedAt: number;
+}
+
+export type UserRole = "admin" | "user";
+
+export interface User {
+	id: string;
+	username: string;
+	role: UserRole;
+	createdAt: number;
+	updatedAt: number;
+	lastLoginAt?: number;
 }
 
 export interface Usage {
@@ -65,31 +91,40 @@ export interface MessageMeta {
 	credits?: number;
 	reasoning?: string;
 	thinkingMs?: number;
+	attachments?: ImageAttachment[];
 	webSearch?: {
-		provider: "x" | "xai";
+		provider: "x" | "xai" | "claude";
 		query?: string;
 		results?: Array<{
 			id?: string;
 			author?: string;
-			text: string;
+			text?: string;
+			title?: string;
 			url?: string;
 			createdAt?: string;
+			pageAge?: string;
 		}>;
 		citations?: string[];
 	};
 }
 
 export const PROVIDER_NAMES: Record<LLMProvider, string> = {
-	deepseek: "DeepSeek",
-	xai: "xAI",
 	poe: "Poe",
-	"workers-ai": "Workers AI",
+	xai: "xAI",
+	deepseek: "DeepSeek",
 	poloai: "PoloAI",
 	ark: "火山方舟",
+	"workers-ai": "Workers AI",
 };
 
 export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
-	deepseek: ["deepseek-chat", "deepseek-reasoner"],
+	poe: [
+		"grok-4.1-fast-reasoning",
+		"kimi-k2.5",
+		"claude-sonnet-4.5",
+		"o3",
+		"gemini-3-pro",
+	],
 	xai: [
 		"grok-4-1-fast-reasoning",
 		"grok-4-1-fast-non-reasoning",
@@ -101,12 +136,7 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 		"grok-3",
 		"grok-2-vision-1212",
 	],
-	poe: ["kimi-k2.5", "claude-sonnet-4.5", "o3", "gemini-3-pro"],
-	"workers-ai": [
-		"@cf/meta/llama-3.1-8b-instruct",
-		"@cf/meta/llama-3.1-70b-instruct",
-		"@cf/qwen/qwen1.5-7b-chat",
-	],
+	deepseek: ["deepseek-chat", "deepseek-reasoner"],
 	poloai: [
 		"claude-opus-4-5-20251101-thinking",
 		"claude-sonnet-4-5-20250929-thinking",
@@ -114,4 +144,9 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 		"claude-haiku-4-5-20251001-thinking",
 	],
 	ark: ["ark-code-latest"],
+	"workers-ai": [
+		"@cf/meta/llama-3.1-8b-instruct",
+		"@cf/meta/llama-3.1-70b-instruct",
+		"@cf/qwen/qwen1.5-7b-chat",
+	],
 };

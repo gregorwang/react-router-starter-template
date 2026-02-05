@@ -8,14 +8,16 @@ interface LLMStreamEvent {
 	credits?: number;
 	meta?: { thinkingMs?: number };
 	search?: {
-		provider: "x" | "xai";
+		provider: "x" | "xai" | "claude";
 		query?: string;
 		results?: Array<{
 			id?: string;
 			author?: string;
-			text: string;
+			text?: string;
+			title?: string;
 			url?: string;
 			createdAt?: string;
+			pageAge?: string;
 		}>;
 		citations?: string[];
 	};
@@ -35,6 +37,7 @@ export async function streamLLMFromServer(
 		outputTokens?: number;
 		outputEffort?: "low" | "medium" | "high" | "max";
 		webSearch?: boolean;
+		enableTools?: boolean;
 	},
 ): Promise<ReadableStream<Uint8Array>> {
 	const env = context.cloudflare.env;
@@ -111,6 +114,7 @@ export async function streamLLMFromServer(
 						enableThinking: options?.enableThinking,
 						thinkingBudget: options?.thinkingBudget,
 						outputTokens: options?.outputTokens,
+						enableTools: options?.enableTools,
 					});
 					break;
 				case "ark":
@@ -492,6 +496,7 @@ async function streamPoloAIServer(
 		enableThinking?: boolean;
 		thinkingBudget?: number;
 		outputTokens?: number;
+		enableTools?: boolean;
 	},
 ): Promise<void> {
 	const webSearch = options?.webSearch ?? true;
@@ -503,73 +508,71 @@ async function streamPoloAIServer(
 		typeof options?.outputTokens === "number" ? options.outputTokens : 2048;
 	const outputTokens = Math.max(256, Math.floor(rawOutputTokens));
 	const maxTokens = enableThinking ? thinkingBudget + outputTokens : outputTokens;
-	const extraBody =
-		model.startsWith("claude-opus")
-			? { output_effort: options?.outputEffort ?? "max", web_search: webSearch }
-			: model.startsWith("claude-sonnet")
-				? { web_search: webSearch }
-				: undefined;
+	const extraBody = model.startsWith("claude-opus")
+		? { output_effort: options?.outputEffort ?? "max" }
+		: undefined;
+	const formattedMessages = buildPoloAIMessages(messages);
+	const localToolsEnabled = options?.enableTools ?? true;
+	const toolBundle = buildPoloAITools({ webSearch, enableTools: localToolsEnabled });
+	const toolChoice = toolBundle.tools.length > 0 ? { type: "auto" } : undefined;
 
-	const response = await fetch("https://poloai.top/v1/messages", {
-		method: "POST",
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/json",
-			Authorization: apiKey,
-		},
-		body: JSON.stringify({
-			model,
-			messages: messages.map((message) => ({
-				role: message.role,
-				content: message.content,
-			})),
-			stream: true,
-			max_tokens: maxTokens,
-			...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
-			...(extraBody ? { extra_body: extraBody } : {}),
-		}),
-	});
+	const baseBody = {
+		model,
+		stream: true,
+		max_tokens: maxTokens,
+		...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
+		...(extraBody ? { extra_body: extraBody } : {}),
+		...(toolBundle.tools.length > 0
+			? { tools: toolBundle.tools, tool_choice: toolChoice }
+			: {}),
+	} as Record<string, unknown>;
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`PoloAI API error: ${response.status} - ${errorText}`);
+	let currentMessages = formattedMessages;
+	let rounds = 0;
+	let aggregatedSearch: LLMStreamEvent["search"] | undefined;
+
+	while (true) {
+		const result = await runPoloAIStreamRequest({
+			apiKey,
+			messages: currentMessages,
+			baseBody,
+			localToolNames: toolBundle.localToolNames,
+			writeEvent,
+		});
+
+		aggregatedSearch = mergeSearchMeta(aggregatedSearch, result.searchMeta);
+		if (aggregatedSearch) {
+			await writeEvent({ type: "search", search: aggregatedSearch });
+		}
+
+		if (result.toolUses.length === 0) {
+			return;
+		}
+
+		rounds += 1;
+		if (rounds > 2) {
+			throw new Error("Tool call limit exceeded.");
+		}
+
+		const toolResults = await runPoloAITools(result.toolUses);
+		const toolUseBlocks = result.toolUses.map((toolUse) => ({
+			type: "tool_use",
+			id: toolUse.id,
+			name: toolUse.name,
+			input: toolUse.input ?? {},
+		}));
+		const toolResultBlocks = toolResults.map((toolResult) => ({
+			type: "tool_result",
+			tool_use_id: toolResult.id,
+			content: toolResult.content,
+			...(toolResult.isError ? { is_error: true } : {}),
+		}));
+
+		currentMessages = currentMessages.concat([
+			{ role: "assistant", content: toolUseBlocks },
+			{ role: "user", content: toolResultBlocks },
+		]);
 	}
-
-	const contentType = response.headers.get("Content-Type") || "";
-	if (!contentType.includes("text/event-stream")) {
-		const data = (await response.json()) as any;
-		const content = extractPoloAIContent(data);
-		const reasoning = extractPoloAIReasoning(data);
-		const usage = normalizeUsage(data?.usage);
-		if (reasoning) {
-			await writeEvent({ type: "reasoning", content: reasoning });
-		}
-		if (content) {
-			await writeEvent({ type: "delta", content });
-		}
-		if (usage) {
-			await writeEvent({ type: "usage", usage });
-		}
-		return;
-	}
-
-	await processSSEStream(response, async (parsed) => {
-		if (parsed?.error?.message) {
-			throw new Error(parsed.error.message);
-		}
-		const content = extractPoloAIContent(parsed);
-		const reasoning = extractPoloAIReasoning(parsed);
-		const usage = normalizeUsage(parsed?.usage);
-		if (reasoning) {
-			await writeEvent({ type: "reasoning", content: reasoning });
-		}
-		if (content) {
-			await writeEvent({ type: "delta", content });
-		}
-		if (usage) {
-			await writeEvent({ type: "usage", usage });
-		}
-	});
 }
 
 async function streamArkServer(
@@ -860,6 +863,530 @@ function extractPoloAIReasoning(payload: any): string | undefined {
 	}
 
 	return undefined;
+}
+
+type PoloAIToolUse = {
+	id: string;
+	name: string;
+	input?: unknown;
+	inputJson?: string;
+};
+
+type PoloAIToolResult = {
+	id: string;
+	content: string;
+	isError?: boolean;
+};
+
+function evaluateMathExpression(expression: string): number {
+	const sanitized = expression.replace(/\s+/g, "");
+	if (!sanitized) {
+		throw new Error("Missing expression");
+	}
+	if (!/^[0-9+\-*/().]+$/.test(sanitized)) {
+		throw new Error("Expression contains unsupported characters");
+	}
+
+	const tokens = sanitized.match(/\d+(?:\.\d+)?|[()+\-*/]/g) || [];
+	const values: number[] = [];
+	const ops: string[] = [];
+	const precedence: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
+
+	const applyOp = () => {
+		const op = ops.pop();
+		const right = values.pop();
+		const left = values.pop();
+		if (!op || right === undefined || left === undefined) {
+			throw new Error("Invalid expression");
+		}
+		switch (op) {
+			case "+":
+				values.push(left + right);
+				break;
+			case "-":
+				values.push(left - right);
+				break;
+			case "*":
+				values.push(left * right);
+				break;
+			case "/":
+				values.push(left / right);
+				break;
+			default:
+				throw new Error("Invalid operator");
+		}
+	};
+
+	const isOperator = (token: string) => ["+", "-", "*", "/"].includes(token);
+
+	for (let i = 0; i < tokens.length; i += 1) {
+		const token = tokens[i];
+		if (!token) continue;
+
+		if (/^\d/.test(token)) {
+			values.push(Number(token));
+			continue;
+		}
+
+		if (token === "(") {
+			ops.push(token);
+			continue;
+		}
+
+		if (token === ")") {
+			while (ops.length && ops[ops.length - 1] !== "(") {
+				applyOp();
+			}
+			if (ops.pop() !== "(") {
+				throw new Error("Mismatched parentheses");
+			}
+			continue;
+		}
+
+		if (isOperator(token)) {
+			const prev = tokens[i - 1];
+			if (token === "-" && (i === 0 || (prev && (isOperator(prev) || prev === "(")))) {
+				values.push(0);
+			}
+			while (
+				ops.length &&
+				isOperator(ops[ops.length - 1]) &&
+				precedence[ops[ops.length - 1]] >= precedence[token]
+			) {
+				applyOp();
+			}
+			ops.push(token);
+			continue;
+		}
+
+		throw new Error("Invalid token");
+	}
+
+	while (ops.length) {
+		if (ops[ops.length - 1] === "(") {
+			throw new Error("Mismatched parentheses");
+		}
+		applyOp();
+	}
+
+	if (values.length !== 1) {
+		throw new Error("Invalid expression");
+	}
+	return values[0];
+}
+
+const POLOAI_LOCAL_TOOLS = [
+	{
+		name: "get_time",
+		description: "Get the current time in UTC or in a specific IANA time zone.",
+		input_schema: {
+			type: "object",
+			properties: {
+				time_zone: {
+					type: "string",
+					description: "IANA time zone, e.g. Asia/Shanghai.",
+				},
+			},
+		},
+		handler: async (input: any) => {
+			const now = new Date();
+			const payload: Record<string, unknown> = {
+				iso_utc: now.toISOString(),
+				unix_ms: now.getTime(),
+			};
+			const timeZone = typeof input?.time_zone === "string" ? input.time_zone : null;
+			if (timeZone) {
+				try {
+					const formatter = new Intl.DateTimeFormat("sv-SE", {
+						timeZone,
+						year: "numeric",
+						month: "2-digit",
+						day: "2-digit",
+						hour: "2-digit",
+						minute: "2-digit",
+						second: "2-digit",
+						hour12: false,
+					});
+					payload.local = formatter.format(now).replace(" ", "T");
+					payload.time_zone = timeZone;
+				} catch {
+					payload.time_zone_error = "Invalid time zone";
+				}
+			}
+			return JSON.stringify(payload);
+		},
+	},
+	{
+		name: "calculate",
+		description: "Evaluate a basic math expression with + - * / and parentheses.",
+		input_schema: {
+			type: "object",
+			properties: {
+				expression: {
+					type: "string",
+					description: "Math expression, e.g. (12 + 8) / 4",
+				},
+			},
+			required: ["expression"],
+		},
+		handler: async (input: any) => {
+			const expression =
+				typeof input?.expression === "string" ? input.expression.trim() : "";
+			const result = evaluateMathExpression(expression);
+			if (!Number.isFinite(result)) {
+				throw new Error("Invalid expression result");
+			}
+			return JSON.stringify({ expression, result });
+		},
+	},
+];
+
+function buildPoloAITools(options: {
+	webSearch: boolean;
+	enableTools: boolean;
+}): { tools: Array<Record<string, unknown>>; localToolNames: Set<string> } {
+	const tools: Array<Record<string, unknown>> = [];
+	const localToolNames = new Set<string>();
+
+	if (options.webSearch) {
+		tools.push({ type: "web_search_20250305", name: "web_search" });
+	}
+
+	if (options.enableTools) {
+		for (const tool of POLOAI_LOCAL_TOOLS) {
+			tools.push({
+				name: tool.name,
+				description: tool.description,
+				input_schema: tool.input_schema,
+			});
+			localToolNames.add(tool.name);
+		}
+	}
+
+	return { tools, localToolNames };
+}
+
+function buildPoloAIMessages(messages: LLMMessage[]) {
+	return messages.map((message) => {
+		const attachments = (message.attachments ?? []).filter((item) => item.data);
+		if (!attachments.length) {
+			return { role: message.role, content: message.content };
+		}
+		const blocks: Array<Record<string, unknown>> = [];
+		if (message.content.trim()) {
+			blocks.push({ type: "text", text: message.content });
+		}
+		for (const attachment of attachments) {
+			if (!attachment?.data) continue;
+			blocks.push({
+				type: "image",
+				source: {
+					type: "base64",
+					media_type: attachment.mimeType,
+					data: attachment.data,
+				},
+			});
+		}
+		return { role: message.role, content: blocks.length ? blocks : message.content };
+	});
+}
+
+async function runPoloAITools(toolUses: PoloAIToolUse[]): Promise<PoloAIToolResult[]> {
+	const results: PoloAIToolResult[] = [];
+	for (const toolUse of toolUses) {
+		const tool = POLOAI_LOCAL_TOOLS.find((entry) => entry.name === toolUse.name);
+		if (!tool) {
+			results.push({
+				id: toolUse.id,
+				content: `Unknown tool: ${toolUse.name}`,
+				isError: true,
+			});
+			continue;
+		}
+		try {
+			const output = await tool.handler(toolUse.input ?? {});
+			results.push({ id: toolUse.id, content: output });
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Tool execution failed";
+			results.push({ id: toolUse.id, content: message, isError: true });
+		}
+	}
+	return results;
+}
+
+function parseClaudeContentBlocks(payload: any): Array<Record<string, any>> {
+	if (Array.isArray(payload?.content)) return payload.content;
+	if (Array.isArray(payload?.message?.content)) return payload.message.content;
+	const choice = payload?.choices?.[0];
+	if (Array.isArray(choice?.message?.content)) return choice.message.content;
+	return [];
+}
+
+function extractClaudeSearchFromBlocks(blocks: Array<Record<string, any>>) {
+	const results: Array<{
+		title?: string;
+		url?: string;
+		pageAge?: string;
+	}> = [];
+	const citations = new Set<string>();
+
+	for (const block of blocks) {
+		if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+			for (const item of block.content) {
+				if (item?.type === "web_search_result") {
+					results.push({
+						title: item.title,
+						url: item.url,
+						pageAge: item.page_age,
+					});
+				}
+			}
+		}
+		if (Array.isArray(block?.citations)) {
+			for (const citation of block.citations) {
+				const url =
+					typeof citation === "string"
+						? citation
+						: typeof citation?.url === "string"
+							? citation.url
+							: null;
+				if (url) citations.add(url);
+			}
+		}
+	}
+
+	if (results.length === 0 && citations.size === 0) {
+		return undefined;
+	}
+
+	return {
+		provider: "claude" as const,
+		results: results.map((result, index) => ({
+			id: `${index}`,
+			title: result.title,
+			url: result.url,
+			pageAge: result.pageAge,
+		})),
+		citations: Array.from(citations),
+	};
+}
+
+type SearchResult = NonNullable<LLMStreamEvent["search"]>["results"][number];
+
+function mergeSearchMeta(
+	base: LLMStreamEvent["search"] | undefined,
+	next: LLMStreamEvent["search"] | undefined,
+) {
+	if (!next) return base;
+	if (!base) return next;
+	const citations = new Set<string>([
+		...(base.citations || []),
+		...(next.citations || []),
+	]);
+	const resultsMap = new Map<string, SearchResult>();
+	for (const result of base.results || []) {
+		const key = result.url || result.title || result.text || result.id || "";
+		if (!key) continue;
+		resultsMap.set(key, result);
+	}
+	for (const result of next.results || []) {
+		const key = result.url || result.title || result.text || result.id || "";
+		if (!key) continue;
+		resultsMap.set(key, result);
+	}
+	return {
+		provider: next.provider || base.provider,
+		query: next.query || base.query,
+		results: Array.from(resultsMap.values()),
+		citations: Array.from(citations),
+	};
+}
+
+async function runPoloAIStreamRequest(options: {
+	apiKey: string;
+	messages: Array<{ role: string; content: unknown }>;
+	baseBody: Record<string, unknown>;
+	localToolNames: Set<string>;
+	writeEvent: (event: LLMStreamEvent) => Promise<void>;
+}): Promise<{ toolUses: PoloAIToolUse[]; searchMeta?: LLMStreamEvent["search"] }> {
+	const response = await fetch("https://poloai.top/v1/messages", {
+		method: "POST",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+			Authorization: options.apiKey,
+		},
+		body: JSON.stringify({
+			...options.baseBody,
+			messages: options.messages,
+		}),
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`PoloAI API error: ${response.status} - ${errorText}`);
+	}
+
+	const contentType = response.headers.get("Content-Type") || "";
+	if (!contentType.includes("text/event-stream")) {
+		const data = (await response.json()) as any;
+		const blocks = parseClaudeContentBlocks(data);
+		const searchMeta = extractClaudeSearchFromBlocks(blocks);
+
+		const toolUses = blocks
+			.filter((block) => block?.type === "tool_use")
+			.map((block) => ({
+				id: block.id,
+				name: block.name,
+				input: block.input,
+			}))
+			.filter((toolUse) => options.localToolNames.has(toolUse.name));
+
+		const reasoning = extractPoloAIReasoning(data);
+		if (reasoning) {
+			await options.writeEvent({ type: "reasoning", content: reasoning });
+		}
+
+		const content = extractPoloAIContent(data);
+		if (content) {
+			await options.writeEvent({ type: "delta", content });
+		}
+
+		const usage = normalizeUsage(data?.usage);
+		if (usage) {
+			await options.writeEvent({ type: "usage", usage });
+		}
+
+		return { toolUses, searchMeta };
+	}
+
+	const toolUsesByIndex = new Map<number, PoloAIToolUse>();
+	const citations = new Set<string>();
+	const searchResults: Array<{
+		title?: string;
+		url?: string;
+		pageAge?: string;
+	}> = [];
+
+	await processSSEStream(response, async (parsed) => {
+		if (parsed?.error?.message) {
+			throw new Error(parsed.error.message);
+		}
+
+		if (parsed?.type === "content_block_start") {
+			const block = parsed.content_block;
+			if (block?.type === "tool_use") {
+				toolUsesByIndex.set(parsed.index, {
+					id: block.id,
+					name: block.name,
+					input: block.input,
+					inputJson: "",
+				});
+			}
+			if (block?.type === "text" && typeof block.text === "string") {
+				await options.writeEvent({ type: "delta", content: block.text });
+			}
+			if (block?.type === "thinking" && typeof block.thinking === "string") {
+				await options.writeEvent({ type: "reasoning", content: block.thinking });
+			}
+			if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+				for (const item of block.content) {
+					if (item?.type === "web_search_result") {
+						searchResults.push({
+							title: item.title,
+							url: item.url,
+							pageAge: item.page_age,
+						});
+					}
+				}
+			}
+			if (Array.isArray(block?.citations)) {
+				for (const citation of block.citations) {
+					const url =
+						typeof citation === "string"
+							? citation
+							: typeof citation?.url === "string"
+								? citation.url
+								: null;
+					if (url) citations.add(url);
+				}
+			}
+		}
+
+		if (parsed?.type === "content_block_delta") {
+			const delta = parsed.delta;
+			if (delta?.type === "text_delta" && typeof delta.text === "string") {
+				await options.writeEvent({ type: "delta", content: delta.text });
+			}
+			if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
+				await options.writeEvent({ type: "reasoning", content: delta.thinking });
+			}
+			if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
+				const entry = toolUsesByIndex.get(parsed.index);
+				if (entry) {
+					entry.inputJson = `${entry.inputJson ?? ""}${delta.partial_json}`;
+				}
+			}
+			if (Array.isArray(delta?.citations)) {
+				for (const citation of delta.citations) {
+					const url =
+						typeof citation === "string"
+							? citation
+							: typeof citation?.url === "string"
+								? citation.url
+								: null;
+					if (url) citations.add(url);
+				}
+			}
+		}
+
+		if (parsed?.type === "content_block_stop") {
+			const entry = toolUsesByIndex.get(parsed.index);
+			if (entry && entry.input === undefined && entry.inputJson) {
+				try {
+					entry.input = JSON.parse(entry.inputJson);
+				} catch {
+					entry.input = entry.inputJson;
+				}
+			}
+		}
+
+		if (parsed?.type === "message_delta") {
+			const usage = normalizeUsage(parsed?.usage);
+			if (usage) {
+				await options.writeEvent({ type: "usage", usage });
+			}
+		}
+	});
+
+	for (const entry of toolUsesByIndex.values()) {
+		if (entry.input === undefined && entry.inputJson) {
+			try {
+				entry.input = JSON.parse(entry.inputJson);
+			} catch {
+				entry.input = entry.inputJson;
+			}
+		}
+	}
+
+	const toolUses = Array.from(toolUsesByIndex.values()).filter((toolUse) =>
+		options.localToolNames.has(toolUse.name),
+	);
+	const searchMeta =
+		searchResults.length > 0 || citations.size > 0
+			? {
+					provider: "claude" as const,
+					results: searchResults.map((result, index) => ({
+						id: `${index}`,
+						title: result.title,
+						url: result.url,
+						pageAge: result.pageAge,
+					})),
+					citations: Array.from(citations),
+				}
+			: undefined;
+
+	return { toolUses, searchMeta };
 }
 
 async function maybeInjectXSearch(

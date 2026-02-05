@@ -64,9 +64,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			id: crypto.randomUUID(),
 			title: "新对话",
 			messages: [],
-			provider: "deepseek",
-			model: "deepseek-chat",
-			projectId: "default",
+			provider: "poe",
+			model: "grok-4.1-fast-reasoning",
+			enableTools: true,
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 		});
@@ -103,6 +103,7 @@ function mergeMessageMeta(
 		...next,
 		usage: next.usage ?? base.usage,
 		webSearch: next.webSearch ?? base.webSearch,
+		attachments: next.attachments ?? base.attachments,
 	};
 }
 

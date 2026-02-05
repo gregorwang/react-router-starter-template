@@ -1,7 +1,10 @@
 import { useCallback, useRef } from "react";
 import { useChat as useChatContext } from "../contexts/ChatContext";
 
-import type { Message } from "../lib/llm/types";
+import type { ImageAttachment, LLMMessage, Message } from "../lib/llm/types";
+
+type ChatMessage = Pick<Message, "role" | "content">;
+type ChatPayloadMessage = LLMMessage;
 
 export function useChat() {
 	const {
@@ -17,19 +20,56 @@ export function useChat() {
 
 	const abortControllerRef = useRef<AbortController | null>(null);
 	const autoCompactInFlightRef = useRef(false);
+	const autoTitleInFlightRef = useRef(false);
 
 	const AUTO_COMPACT_MESSAGE_THRESHOLD = 12;
 	const AUTO_COMPACT_TOKEN_THRESHOLD = 3500;
 	const AUTO_COMPACT_MIN_NEW_MESSAGES = 4;
+	const MAX_PAYLOAD_CHARS = 100000;
+	const MIN_CONTEXT_MESSAGES = 2;
+	const MAX_CONTEXT_MESSAGES = 2;
+	const AUTO_TITLE_MAX_CHARS = 2000;
 
 	const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
-	const estimateMessageTokens = (messages: Array<{ role: string; content: string }>) =>
+	const estimateMessageTokens = (messages: ChatMessage[]) =>
 		messages.reduce((total, msg) => total + estimateTokens(msg.content), 0);
+	const estimateMessageChars = <T extends { content: string }>(messages: T[]) =>
+		messages.reduce((total, msg) => total + msg.content.length, 0);
+	const clipText = (text: string, maxChars: number) =>
+		text.length > maxChars ? text.slice(0, maxChars) : text;
+
+	const trimMessagesToCharBudget = <T extends { content: string }>(
+		messages: T[],
+		budgetChars: number,
+		minKeep: number,
+	) => {
+		if (messages.length === 0) return messages;
+
+		const keepMin = Math.min(minKeep, messages.length);
+		let totalChars = 0;
+		const kept: ChatMessage[] = [];
+
+		for (let i = messages.length - 1; i >= 0; i -= 1) {
+			const message = messages[i];
+			const messageChars = message.content.length;
+			if (kept.length >= keepMin && totalChars + messageChars > budgetChars) {
+				break;
+			}
+			kept.unshift(message);
+			totalChars += messageChars;
+		}
+
+		if (kept.length === 0) {
+			return messages.slice(-1);
+		}
+
+		return kept;
+	};
 
 	const maybeAutoCompact = useCallback(
 		async (
 			conversationId: string,
-			messages: Array<{ role: string; content: string }>,
+			messages: ChatMessage[],
 			summaryMessageCount: number,
 		) => {
 			if (autoCompactInFlightRef.current) return;
@@ -89,14 +129,64 @@ export function useChat() {
 		],
 	);
 
+	const maybeAutoTitle = useCallback(
+		async (
+			conversationId: string,
+			messages: ChatMessage[],
+			existingTitle?: string,
+		) => {
+			if (autoTitleInFlightRef.current) return;
+
+			const normalizedTitle = (existingTitle || "").trim();
+			if (normalizedTitle && normalizedTitle !== "新对话" && normalizedTitle !== "New Chat") {
+				return;
+			}
+
+			autoTitleInFlightRef.current = true;
+			try {
+				const response = await fetch("/conversations/title", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						conversationId,
+						messages,
+						force: true,
+					}),
+				});
+				if (!response.ok) {
+					autoTitleInFlightRef.current = false;
+					return;
+				}
+			const data = (await response.json()) as { title?: string };
+			const nextTitle = data.title?.trim();
+			if (nextTitle) {
+				setCurrentConversation((prev) => {
+					if (!prev || prev.id !== conversationId) return prev;
+					return { ...prev, title: nextTitle };
+				});
+			}
+			} catch {
+				// Ignore auto-title failures
+			} finally {
+				autoTitleInFlightRef.current = false;
+			}
+		},
+		[setCurrentConversation],
+	);
+
 	const startConversation = useCallback(() => {
 		startConv();
 	}, [startConv]);
 
 	const sendMessage = useCallback(
-		async (content: string) => {
+		async (content: string, attachments?: ImageAttachment[]) => {
 			if (!currentConversation) {
 				startConversation();
+				return;
+			}
+
+			const hasAttachments = Boolean(attachments?.length);
+			if (!content.trim() && !hasAttachments) {
 				return;
 			}
 
@@ -105,6 +195,7 @@ export function useChat() {
 
 			const conversationId = currentConversation.id;
 			const summaryMessageCount = currentConversation.summaryMessageCount ?? 0;
+			const isFirstTurn = currentConversation.messages.length === 0;
 
 			// Create message IDs upfront
 			const userMessageId = crypto.randomUUID();
@@ -119,6 +210,7 @@ export function useChat() {
 				meta: {
 					model: currentConversation.model,
 					provider: currentConversation.provider,
+					attachments: attachments?.length ? attachments : undefined,
 				},
 			};
 			addMsg(userMessage);
@@ -141,12 +233,43 @@ export function useChat() {
 
 			try {
 				// Prepare messages for LLM (exclude the empty assistant message we just added)
-				const messages = currentConversation.messages
+				const rawMessages: ChatMessage[] = currentConversation.messages
 					.concat([userMessage])
 					.map((msg) => ({
 						role: msg.role,
 						content: msg.content,
 					}));
+				const rawPayloadMessages: ChatPayloadMessage[] =
+					currentConversation.messages.concat([userMessage]).map((msg) => {
+						const attachments = msg.meta?.attachments?.filter((item) => item.data);
+						return {
+							role: msg.role,
+							content: msg.content,
+							attachments: attachments && attachments.length > 0 ? attachments : undefined,
+						};
+					});
+				let payloadMessages = rawPayloadMessages;
+				let messagesTrimmed = false;
+
+				if (currentConversation.summary) {
+					const startIndex = Math.min(summaryMessageCount, rawMessages.length);
+					payloadMessages = rawPayloadMessages.slice(startIndex);
+					messagesTrimmed = true;
+
+					if (payloadMessages.length > MAX_CONTEXT_MESSAGES) {
+						payloadMessages = payloadMessages.slice(-MAX_CONTEXT_MESSAGES);
+						messagesTrimmed = true;
+					}
+				}
+
+				if (estimateMessageChars(payloadMessages) > MAX_PAYLOAD_CHARS) {
+					payloadMessages = trimMessagesToCharBudget(
+						payloadMessages,
+						MAX_PAYLOAD_CHARS,
+						MIN_CONTEXT_MESSAGES,
+					);
+					messagesTrimmed = true;
+				}
 
 				// Call the server action instead of client-side LLM APIs
 				const response = await fetch("/chat/action", {
@@ -157,7 +280,8 @@ export function useChat() {
 					body: JSON.stringify({
 						conversationId: currentConversation.id,
 						projectId: currentConversation.projectId,
-						messages,
+						messages: payloadMessages,
+						messagesTrimmed,
 						provider: currentConversation.provider,
 						model: currentConversation.model,
 						userMessageId,
@@ -169,6 +293,7 @@ export function useChat() {
 						outputTokens: currentConversation.outputTokens,
 						outputEffort: currentConversation.outputEffort,
 						webSearch: currentConversation.webSearch,
+						enableTools: currentConversation.enableTools,
 					}),
 					signal: abortControllerRef.current.signal,
 				});
@@ -275,7 +400,7 @@ export function useChat() {
 				if (!meta.usage) {
 					const estimateTokens = (text: string) =>
 						Math.max(1, Math.ceil(text.length / 4));
-					const promptTokens = messages.reduce(
+					const promptTokens = rawMessages.reduce(
 						(total, msg) => total + estimateTokens(msg.content),
 						0,
 					);
@@ -294,12 +419,26 @@ export function useChat() {
 					role: "assistant" as const,
 					content: fullContent,
 				};
-				const messagesForSummary = messages.concat([assistantMessage]);
+				const messagesForSummary = rawMessages.concat([assistantMessage]);
 				void maybeAutoCompact(
 					conversationId,
 					messagesForSummary,
 					summaryMessageCount,
 				);
+
+				if (isFirstTurn) {
+					const titleMessages: ChatMessage[] = [
+						{
+							role: "user",
+							content: clipText(userMessage.content, AUTO_TITLE_MAX_CHARS),
+						},
+						{
+							role: "assistant",
+							content: clipText(fullContent, AUTO_TITLE_MAX_CHARS),
+						},
+					];
+					void maybeAutoTitle(conversationId, titleMessages, currentConversation.title);
+				}
 			} catch (error) {
 				if ((error as Error).name === "AbortError") {
 					console.log("Request aborted");
@@ -321,6 +460,7 @@ export function useChat() {
 			setLoading,
 			setStreaming,
 			maybeAutoCompact,
+			maybeAutoTitle,
 		],
 	);
 

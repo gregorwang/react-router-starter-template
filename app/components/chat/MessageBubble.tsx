@@ -35,10 +35,13 @@ export function MessageBubble({
 		if (thinkingMs < 1000) return `${thinkingMs}ms`;
 		return `${(thinkingMs / 1000).toFixed(1)}s`;
 	}, [thinkingMs]);
+	const attachments = message.meta?.attachments || [];
 	const citationUrls = useMemo(() => {
 		const urls = message.meta?.webSearch?.citations || [];
 		return urls.filter((url) => /^https?:\/\//i.test(url));
 	}, [message.meta?.webSearch?.citations]);
+	const searchProviderLabel =
+		message.meta?.webSearch?.provider === "claude" ? "Claude 搜索" : "X 搜索";
 
 	const handleCopy = async () => {
 		try {
@@ -130,8 +133,29 @@ export function MessageBubble({
 						</pre>
 					</div>
 				)}
+				{attachments.length > 0 && (
+					<div className="mb-3 flex flex-wrap gap-2">
+						{attachments.map((attachment) => {
+							const src = attachment.data
+								? `data:${attachment.mimeType};base64,${attachment.data}`
+								: attachment.url;
+							if (!src) return null;
+							return (
+								<img
+									key={attachment.id}
+									src={src}
+									alt={attachment.name || "上传图片"}
+									className="w-28 h-28 rounded-xl object-cover border border-white/40 dark:border-neutral-800/60"
+									loading="lazy"
+								/>
+							);
+						})}
+					</div>
+				)}
 				{isUser ? (
-					<p className="whitespace-pre-wrap">{message.content}</p>
+					message.content.trim().length > 0 && (
+						<p className="whitespace-pre-wrap">{message.content}</p>
+					)
 				) : showStreamingPlaceholder ? (
 					<div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
 						<span className="flex gap-1">
@@ -162,13 +186,26 @@ export function MessageBubble({
 				{message.meta?.webSearch?.results?.length ? (
 					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
 						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
-							X 搜索结果
+							{searchProviderLabel}结果
 						</div>
 						<ul className="space-y-1">
 							{message.meta.webSearch.results.map((result, index) => (
 								<li key={`${result.id ?? index}`}>
 									{result.author ? `@${result.author}: ` : ""}
-									{result.text}
+									{result.title || result.text || ""}
+									{result.url ? (
+										<>
+											{" "}
+											<a
+												href={result.url}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="text-brand-600 hover:underline dark:text-brand-300"
+											>
+												{result.url}
+											</a>
+										</>
+									) : null}
 								</li>
 							))}
 						</ul>
@@ -177,7 +214,7 @@ export function MessageBubble({
 				{citationUrls.length > 0 ? (
 					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
 						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
-							X 搜索引用
+							{searchProviderLabel}引用
 						</div>
 						<ul className="space-y-1">
 							{citationUrls.map((url, index) => (

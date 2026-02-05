@@ -14,6 +14,7 @@ interface ChatContainerProps {
 	isSidebarCollapsed?: boolean;
 	activeProjectName?: string;
 	providerAvailability?: Partial<Record<LLMProvider, boolean>>;
+	modelAvailability?: Record<string, { available: boolean; reason?: string }>;
 }
 
 export function ChatContainer({
@@ -23,6 +24,7 @@ export function ChatContainer({
 	isSidebarCollapsed = false,
 	activeProjectName,
 	providerAvailability,
+	modelAvailability,
 }: ChatContainerProps) {
 	const { currentConversation, setCurrentConversation, isStreaming } = useChat();
 	const { theme, toggleTheme } = useTheme();
@@ -36,6 +38,41 @@ export function ChatContainer({
 	const currentProviderAvailable = currentConversation
 		? isProviderAvailable(currentConversation.provider)
 		: true;
+	const isModelAvailable = (provider: LLMProvider, model: string) => {
+		if (!modelAvailability) return true;
+		const entry = modelAvailability[`${provider}:${model}`];
+		if (!entry) return true;
+		return entry.available !== false;
+	};
+	const getModelUnavailableLabel = (provider: LLMProvider, model: string) => {
+		const entry = modelAvailability?.[`${provider}:${model}`];
+		if (!entry || entry.available !== false) return null;
+		return entry.reason || "未授权";
+	};
+	const currentModelAvailable = currentConversation
+		? currentProviderAvailable &&
+			isModelAvailable(currentConversation.provider, currentConversation.model)
+		: true;
+	const getUnavailableLabel = (provider: LLMProvider) =>
+		provider === "workers-ai" ? "暂时不可用" : "未配置";
+	const getUnavailableMessage = (provider: LLMProvider) =>
+		provider === "workers-ai"
+			? "Workers AI 暂时不可用。"
+			: "当前模型密钥未配置，请在环境变量中设置。";
+	const currentUnavailableNotice =
+		currentConversation && !currentModelAvailable
+			? !currentProviderAvailable
+				? currentConversation.provider === "workers-ai"
+					? "Workers AI 暂时不可用"
+					: "当前模型密钥未配置"
+				: "当前模型未授权"
+			: null;
+	const currentUnavailableMessage =
+		currentConversation && !currentModelAvailable
+			? !currentProviderAvailable
+				? getUnavailableMessage(currentConversation.provider)
+				: "当前模型未授权或已被管理员禁用。"
+			: undefined;
 
 	const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		if (!currentConversation) return;
@@ -184,10 +221,23 @@ export function ChatContainer({
 								<option
 									key={`${provider}:${model}`}
 									value={`${provider}:${model}`}
-									disabled={!available}
+									disabled={
+										!available ||
+										!isModelAvailable(provider as LLMProvider, model)
+									}
 								>
 									{PROVIDER_NAMES[provider as LLMProvider]} - {model}
-									{available ? "" : "（未配置）"}
+									{!available
+										? `（${getUnavailableLabel(provider as LLMProvider)}）`
+										: getModelUnavailableLabel(
+													provider as LLMProvider,
+													model,
+												)
+											? `（${getModelUnavailableLabel(
+													provider as LLMProvider,
+													model,
+												)}）`
+											: ""}
 								</option>
 							));
 						})}
@@ -225,7 +275,7 @@ export function ChatContainer({
 					)}
 					{currentConversation && !currentProviderAvailable && (
 						<span className="text-xs text-rose-500 ml-2">
-							当前模型密钥未配置
+							{currentUnavailableNotice}
 						</span>
 					)}
 
@@ -399,6 +449,24 @@ export function ChatContainer({
 							</span>
 						</label>
 					)}
+					{currentConversation?.provider === "poloai" && (
+						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
+							<input
+								type="checkbox"
+								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+								checked={currentConversation.enableTools ?? true}
+								onChange={(e) =>
+									setCurrentConversation({
+										...currentConversation,
+										enableTools: e.target.checked,
+									})
+								}
+							/>
+							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
+								函数调用
+							</span>
+						</label>
+					)}
 				</div>
 				<button
 					type="button"
@@ -448,7 +516,10 @@ export function ChatContainer({
 				<MessageList />
 			</div>
 			<div className="border-t border-white/60 dark:border-neutral-800/70 p-4 md:p-6 bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl">
-				<InputArea providerAvailable={currentProviderAvailable} />
+				<InputArea
+					providerAvailable={currentModelAvailable}
+					providerUnavailableMessage={currentUnavailableMessage}
+				/>
 			</div>
 		</div>
 	);
