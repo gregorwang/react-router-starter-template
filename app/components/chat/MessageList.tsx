@@ -103,11 +103,11 @@ export function MessageList() {
 		currentConversation.messages[currentConversation.messages.length - 1]?.id;
 
 	return (
-		<div className="relative h-full min-h-0">
-			<div
-				ref={scrollRef}
-				className="w-full max-w-4xl mx-auto py-8 px-4 space-y-6 h-full min-h-0 overflow-y-auto"
-			>
+		<div
+			ref={scrollRef}
+			className="chat-scroll-container relative h-full min-h-0 overflow-y-auto overflow-x-hidden"
+		>
+			<div className="w-full max-w-4xl mx-auto py-8 px-4 space-y-6">
 				{currentConversation.messages.map((message) => (
 					isContextClearedEventMessage(message) ? (
 						<div
@@ -152,3 +152,4 @@ export function MessageList() {
 		</div>
 	);
 }
+

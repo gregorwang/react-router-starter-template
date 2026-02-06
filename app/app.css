@@ -211,3 +211,13 @@ html.dark body {
 ::-webkit-scrollbar-thumb:hover {
 	@apply bg-neutral-400 dark:bg-neutral-600;
 }
+
+.chat-scroll-container {
+	scrollbar-gutter: stable;
+}
+
+@supports (scrollbar-gutter: stable both-edges) {
+	.chat-scroll-container {
+		scrollbar-gutter: stable both-edges;
+	}
+}
