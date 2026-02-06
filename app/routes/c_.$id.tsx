@@ -2,7 +2,7 @@ import type { Route } from "./+types/c_.$id";
 import { ChatContainer } from "../components/chat/ChatContainer";
 import { Sidebar } from "../components/layout/Sidebar";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { redirect, useLocation, useNavigate, useSearchParams } from "react-router";
+import { redirect, useNavigate } from "react-router";
 import { useChat } from "../contexts/ChatContext";
 import {
 	getConversation,
@@ -33,16 +33,30 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 	if (conversationId === "new") {
 		const projects = await projectsPromise;
-		const fallbackProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
-		const newId = crypto.randomUUID();
-		return redirect(`/c/${newId}?project=${fallbackProjectId}`);
+		const targetProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
+		const conversations = await getConversationIndexCached({
+			db: context.db,
+			kv: context.cloudflare.env.SETTINGS_KV,
+			ctx: context.cloudflare.ctx,
+			userId: user.id,
+			projectId: targetProjectId,
+		});
+		const targetConversationId = conversations[0]?.id || crypto.randomUUID();
+		return redirect(`/c/${targetConversationId}?project=${targetProjectId}`);
 	}
 
 	if (!conversationId) {
 		const projects = await projectsPromise;
-		const fallbackProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
-		const newId = crypto.randomUUID();
-		return redirect(`/c/${newId}?project=${fallbackProjectId}`);
+		const targetProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
+		const conversations = await getConversationIndexCached({
+			db: context.db,
+			kv: context.cloudflare.env.SETTINGS_KV,
+			ctx: context.cloudflare.ctx,
+			userId: user.id,
+			projectId: targetProjectId,
+		});
+		const targetConversationId = conversations[0]?.id || crypto.randomUUID();
+		return redirect(`/c/${targetConversationId}?project=${targetProjectId}`);
 	}
 
 	const [projects, existingConversation, modelLimits, projectCounts] = await Promise.all([
@@ -73,7 +87,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 	}
 
 	const activeProjectId =
-		conversation.projectId || resolveProjectId(projects) || projects[0]?.id || "default";
+		resolveProjectId(projects) || conversation.projectId || projects[0]?.id || "default";
 	const conversations = await getConversationIndexCached({
 		db: context.db,
 		kv: context.cloudflare.env.SETTINGS_KV,
@@ -118,8 +132,6 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 
 export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const navigate = useNavigate();
-	const location = useLocation();
-	const [searchParams] = useSearchParams();
 	const [sidebarOpen, setSidebarOpen] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const { currentConversation, setCurrentConversation } = useChat();
@@ -147,16 +159,18 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 		[projectList, activeProjectId],
 	);
 
-	// Load conversation into context when component mounts or conversation changes
+	// Load conversation into context when conversation changes
 	useEffect(() => {
 		if (conversation) {
 			setCurrentConversation(conversation);
 		}
+	}, [conversation, setCurrentConversation]);
+
+	useEffect(() => {
 		return () => {
-			// Clear conversation when unmounting
 			setCurrentConversation(null);
 		};
-	}, [conversation, setCurrentConversation]);
+	}, [setCurrentConversation]);
 
 	useEffect(() => {
 		setConversationList(conversations);
@@ -202,11 +216,10 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 
 	const handleProjectChange = useCallback(
 		(projectId: string) => {
-			const next = new URLSearchParams(searchParams);
-			next.set("project", projectId);
-			navigate(`${location.pathname}?${next.toString()}`);
+			if (!projectId || projectId === activeProjectId) return;
+			navigate(`/c/new?project=${encodeURIComponent(projectId)}`);
 		},
-		[location.pathname, navigate, searchParams],
+		[activeProjectId, navigate],
 	);
 
 	const handleCreateProject = useCallback(async () => {
@@ -223,15 +236,6 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 			handleProjectChange(data.project.id);
 		}
 	}, [handleProjectChange]);
-
-	useEffect(() => {
-		const currentProjectParam = searchParams.get("project");
-		if (activeProjectId && currentProjectParam !== activeProjectId) {
-			const next = new URLSearchParams(searchParams);
-			next.set("project", activeProjectId);
-			navigate(`${location.pathname}?${next.toString()}`, { replace: true });
-		}
-	}, [activeProjectId, location.pathname, navigate, searchParams]);
 
 	return (
 		<div className="chat-layout flex h-screen min-h-0 overflow-hidden relative">

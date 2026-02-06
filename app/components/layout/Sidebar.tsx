@@ -204,7 +204,7 @@ export function Sidebar({
 
 	const updateConversation = async (
 		conversation: Conversation,
-		action: "rename" | "archive" | "unarchive" | "pin" | "unpin",
+		action: "rename" | "pin" | "unpin",
 		title?: string,
 	) => {
 		const response = await fetch("/conversations/update", {
@@ -283,11 +283,20 @@ export function Sidebar({
 	};
 
 	const copyConversationLink = async (conversation: Conversation) => {
-		const href = `${window.location.origin}${buildConversationHref(
-			conversation.id,
-			conversation.projectId,
-		)}`;
-		await navigator.clipboard.writeText(href);
+		const response = await fetch("/conversations/share", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ conversationId: conversation.id }),
+		});
+		if (!response.ok) {
+			const text = await response.text();
+			throw new Error(text || "分享链接生成失败");
+		}
+		const data = (await response.json()) as { url?: string };
+		if (!data.url) {
+			throw new Error("分享链接生成失败");
+		}
+		await navigator.clipboard.writeText(data.url);
 	};
 
 	const handleProjectRename = async (project: Project) => {
@@ -358,27 +367,16 @@ export function Sidebar({
 		conversation: Conversation,
 		action:
 			| "rename"
-			| "archive"
-			| "unarchive"
 			| "pin"
 			| "unpin"
 			| "delete"
-			| "copy"
-			| "export",
+			| "copy",
 	) => {
 		try {
 			if (action === "rename") {
 				const nextTitle = window.prompt("对话标题", conversation.title);
 				if (!nextTitle?.trim()) return;
 				await updateConversation(conversation, "rename", nextTitle.trim());
-				return;
-			}
-			if (action === "archive") {
-				await updateConversation(conversation, "archive");
-				return;
-			}
-			if (action === "unarchive") {
-				await updateConversation(conversation, "unarchive");
 				return;
 			}
 			if (action === "pin") {
@@ -396,14 +394,6 @@ export function Sidebar({
 			if (action === "copy") {
 				await copyConversationLink(conversation);
 				return;
-			}
-			if (action === "export") {
-				window.open(
-					`/conversations/archive?conversationId=${encodeURIComponent(
-						conversation.id,
-					)}&download=1`,
-					"_blank",
-				);
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "操作失败";
@@ -496,6 +486,7 @@ export function Sidebar({
 										<li key={`${item.projectId}:${item.id}`}>
 											<Link
 												to={buildConversationHref(item.id, item.projectId)}
+												prefetch="intent"
 												onClick={() => {
 													setSearchOpen(false);
 													onClose?.();
@@ -808,13 +799,10 @@ function ConversationListRow({
 	onAction: (
 		action:
 			| "rename"
-			| "archive"
-			| "unarchive"
 			| "pin"
 			| "unpin"
 			| "delete"
-			| "copy"
-			| "export",
+			| "copy",
 	) => void;
 }) {
 	const href = buildConversationHref(conversation.id, conversation.projectId);
@@ -825,6 +813,7 @@ function ConversationListRow({
 		<div className="group relative flex items-center h-[56px]">
 			<Link
 				to={href}
+				prefetch="intent"
 				className={cn(
 					"flex-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-200 pr-10",
 					isActive
@@ -862,13 +851,6 @@ function ConversationListRow({
 					<button
 						type="button"
 						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
-						onClick={() => onAction(archived ? "unarchive" : "archive")}
-					>
-						{archived ? "取消归档" : "归档"}
-					</button>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
 						onClick={() => onAction(pinned ? "unpin" : "pin")}
 					>
 						{pinned ? "取消置顶" : "置顶"}
@@ -878,14 +860,7 @@ function ConversationListRow({
 						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
 						onClick={() => onAction("copy")}
 					>
-						复制链接
-					</button>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
-						onClick={() => onAction("export")}
-					>
-						导出
+						复制分享链接
 					</button>
 					<button
 						type="button"

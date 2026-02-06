@@ -743,6 +743,21 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 
 	await db
 		.prepare(
+			`CREATE TABLE IF NOT EXISTS conversation_share_links (
+				token TEXT PRIMARY KEY,
+				conversation_id TEXT NOT NULL,
+				user_id TEXT NOT NULL,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL,
+				revoked_at INTEGER,
+				UNIQUE(user_id, conversation_id),
+				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+			)`,
+		)
+		.run();
+
+	await db
+		.prepare(
 			`CREATE TABLE IF NOT EXISTS users (
 				id TEXT PRIMARY KEY,
 				username TEXT NOT NULL UNIQUE,
@@ -1001,6 +1016,18 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 
 	await db
 		.prepare("CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)")
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_share_links_conversation_id ON conversation_share_links(conversation_id)",
+		)
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON conversation_share_links(user_id)",
+		)
 		.run();
 
 	await db

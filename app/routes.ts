@@ -11,6 +11,7 @@ export default [
 	route("conversations/compact", "routes/conversations.compact.ts"),
 	route("conversations/clear-context", "routes/conversations.clear-context.ts"),
 	route("conversations/fork", "routes/conversations.fork.ts"),
+	route("conversations/share", "routes/conversations.share.ts"),
 	route("conversations/search", "routes/conversations.search.ts"),
 	route("conversations/update", "routes/conversations.update.ts"),
 	route("conversations/title", "routes/conversations.title.ts"),
@@ -20,6 +21,7 @@ export default [
 	route("c/:id", "routes/c_.$id.tsx"),
 	route("chat/action", "routes/chat.action.ts"),
 	route("media/:key", "routes/media.$key.tsx"),
+	route("s/:token", "routes/s.$token.tsx"),
 	route("usage", "routes/usage.tsx"),
 	route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;

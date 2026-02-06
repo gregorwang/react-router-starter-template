@@ -3,6 +3,7 @@
 
 -- Drop existing tables (order matters due to foreign keys)
 DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS conversation_share_links;
 DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS projects;
 DROP TABLE IF EXISTS sessions;
@@ -60,6 +61,17 @@ CREATE TABLE sessions (
     expires_at INTEGER NOT NULL
 );
 
+CREATE TABLE conversation_share_links (
+    token TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    revoked_at INTEGER,
+    UNIQUE(user_id, conversation_id),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
 CREATE TABLE users (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -100,5 +112,7 @@ CREATE INDEX idx_conversations_pinned ON conversations(is_pinned, pinned_at DESC
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_share_links_conversation_id ON conversation_share_links(conversation_id);
+CREATE INDEX idx_share_links_user_id ON conversation_share_links(user_id);
 CREATE INDEX idx_invite_codes_expires_at ON invite_codes(expires_at);
 CREATE INDEX idx_invite_codes_used_by ON invite_codes(used_by);
