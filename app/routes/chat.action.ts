@@ -9,6 +9,7 @@ import type {
 } from "../lib/llm/types";
 import { deriveConversationTitle } from "../lib/llm/title.server";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
+import { invalidateUsageStatsCache } from "../lib/cache/usage-stats.server";
 import {
 	appendConversationMessages,
 	getConversation,
@@ -423,12 +424,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 						},
 						[userMessage, assistantMessage],
 					);
-					if (context.cloudflare.env.SETTINGS_KV) {
-						await invalidateConversationCaches(
-							context.cloudflare.env.SETTINGS_KV,
-							user.id,
-							conversation.projectId,
-						);
+					const kv = context.cloudflare.env.SETTINGS_KV;
+					if (kv) {
+						await Promise.all([
+							invalidateConversationCaches(
+								kv,
+								user.id,
+								conversation.projectId,
+							),
+							invalidateUsageStatsCache(kv, user.id),
+						]);
 					}
 				}
 			})(),

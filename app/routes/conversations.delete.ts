@@ -1,6 +1,7 @@
 import type { Route } from "./+types/conversations.delete";
 import { deleteConversation } from "../lib/db/conversations.server";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
+import { invalidateUsageStatsCache } from "../lib/cache/usage-stats.server";
 import { redirect } from "react-router";
 import { requireAuth } from "../lib/auth.server";
 
@@ -36,12 +37,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	await deleteConversation(context.db, user.id, conversationId);
-	if (context.cloudflare.env.SETTINGS_KV && projectId) {
-		await invalidateConversationCaches(
-			context.cloudflare.env.SETTINGS_KV,
-			user.id,
-			projectId,
-		);
+	const kv = context.cloudflare.env.SETTINGS_KV;
+	if (kv) {
+		const invalidations: Array<Promise<unknown>> = [
+			invalidateUsageStatsCache(kv, user.id),
+		];
+		if (projectId) {
+			invalidations.push(
+				invalidateConversationCaches(
+					kv,
+					user.id,
+					projectId,
+				),
+			);
+		}
+		await Promise.all(invalidations);
 	}
 
 	if (expectsJson) {

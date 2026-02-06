@@ -1,7 +1,7 @@
 import type { Route } from "./+types/usage";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useCallback } from "react";
-import { getUsageStats } from "../lib/db/usage.server";
+import { getUsageStatsCached } from "../lib/cache/usage-stats.server";
 import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 import type { UsageStats } from "../lib/db/usage.server";
@@ -51,7 +51,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 	}
 
 	try {
-		const stats = await getUsageStats(context.db, {
+		const stats = await getUsageStatsCached({
+			db: context.db,
+			kv: context.cloudflare.env.SETTINGS_KV,
+			ctx: context.cloudflare.ctx,
 			userId: user.id,
 			startMs,
 			endMs: now.getTime(),

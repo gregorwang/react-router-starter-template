@@ -5,6 +5,7 @@ import {
 	moveProjectConversations,
 } from "../lib/db/conversations.server";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
+import { invalidateUsageStatsCache } from "../lib/cache/usage-stats.server";
 import {
 	deleteProject,
 	ensureDefaultProject,
@@ -62,14 +63,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 	await deleteProject(context.db, projectId, user.id);
 
-	if (context.cloudflare.env.SETTINGS_KV) {
+	const kv = context.cloudflare.env.SETTINGS_KV;
+	if (kv) {
 		await Promise.all([
-			invalidateConversationCaches(context.cloudflare.env.SETTINGS_KV, user.id, projectId),
+			invalidateConversationCaches(kv, user.id, projectId),
 			invalidateConversationCaches(
-				context.cloudflare.env.SETTINGS_KV,
+				kv,
 				user.id,
 				defaultProject.id,
 			),
+			invalidateUsageStatsCache(kv, user.id),
 		]);
 	}
 

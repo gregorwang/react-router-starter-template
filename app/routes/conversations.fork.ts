@@ -1,5 +1,6 @@
 import type { Route } from "./+types/conversations.fork";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
+import { invalidateUsageStatsCache } from "../lib/cache/usage-stats.server";
 import { getConversation, saveConversation } from "../lib/db/conversations.server";
 import type { Message } from "../lib/llm/types";
 import { requireAuth } from "../lib/auth.server";
@@ -93,12 +94,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	await saveConversation(context.db, forkedConversation);
 
-	if (context.cloudflare.env.SETTINGS_KV) {
-		await invalidateConversationCaches(
-			context.cloudflare.env.SETTINGS_KV,
-			user.id,
-			forkedConversation.projectId,
-		);
+	const kv = context.cloudflare.env.SETTINGS_KV;
+	if (kv) {
+		await Promise.all([
+			invalidateConversationCaches(
+				kv,
+				user.id,
+				forkedConversation.projectId,
+			),
+			invalidateUsageStatsCache(kv, user.id),
+		]);
 	}
 
 	return Response.json(
