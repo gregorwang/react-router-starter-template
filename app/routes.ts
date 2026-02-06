@@ -9,6 +9,8 @@ export default [
 	route("conversations/delete", "routes/conversations.delete.ts"),
 	route("conversations/archive", "routes/conversations.archive.ts"),
 	route("conversations/compact", "routes/conversations.compact.ts"),
+	route("conversations/clear-context", "routes/conversations.clear-context.ts"),
+	route("conversations/fork", "routes/conversations.fork.ts"),
 	route("conversations/title", "routes/conversations.title.ts"),
 	route("projects/create", "routes/projects.create.ts"),
 	route("c/:id", "routes/c_.$id.tsx"),

@@ -7,12 +7,16 @@ interface MessageBubbleProps {
 	message: MessageType;
 	modelName?: string;
 	isStreaming?: boolean;
+	onForkFromMessage?: (messageId: string) => void;
+	isForking?: boolean;
 }
 
 export function MessageBubble({
 	message,
 	modelName,
 	isStreaming,
+	onForkFromMessage,
+	isForking = false,
 }: MessageBubbleProps) {
 	const isUser = message.role === "user";
 	const [copied, setCopied] = useState(false);
@@ -92,18 +96,44 @@ export function MessageBubble({
 					)}
 				>
 					<span>{isUser ? "你" : (modelName || "助手")}</span>
-					<button
-						type="button"
-						onClick={handleCopy}
-						className={cn(
-							"text-xs transition-colors",
-							isUser
-								? "text-white/70 hover:text-white"
-								: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={handleCopy}
+							className={cn(
+								"text-xs transition-colors",
+								isUser
+									? "text-white/70 hover:text-white"
+									: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
+							)}
+						>
+							{copied ? "已复制" : "复制"}
+						</button>
+						{onForkFromMessage && (
+							<details className="relative">
+								<summary
+									className={cn(
+										"list-none cursor-pointer select-none text-xs transition-colors",
+										isUser
+											? "text-white/70 hover:text-white"
+											: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
+									)}
+								>
+									⋯
+								</summary>
+								<div className="absolute right-0 mt-1 min-w-36 rounded-lg border border-neutral-200/80 dark:border-neutral-700/80 bg-white dark:bg-neutral-900 shadow-lg z-10 p-1">
+									<button
+										type="button"
+										onClick={() => onForkFromMessage(message.id)}
+										disabled={isForking}
+										className="w-full text-left text-xs px-2 py-1.5 rounded-md text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{isForking ? "创建中..." : "从这里创建分支"}
+									</button>
+								</div>
+							</details>
 						)}
-					>
-						{copied ? "已复制" : "复制"}
-					</button>
+					</div>
 				</div>
 				{showThinkingStatus && (
 					<div className="mb-2 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">

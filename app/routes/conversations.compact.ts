@@ -2,6 +2,10 @@ import type { Route } from "./+types/conversations.compact";
 import { getConversation, updateConversationSummary } from "../lib/db/conversations.server";
 import { summarizeConversation } from "../lib/llm/summary.server";
 import { requireAuth } from "../lib/auth.server";
+import {
+	getMessagesInActiveContext,
+	isChatTurnMessage,
+} from "../lib/chat/context-boundary";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -10,13 +14,25 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	let conversationId: string | null = null;
-	let payloadMessages: Array<{ role: string; content: string }> | null = null;
+	let payloadMessages:
+		| Array<{
+				role: string;
+				content: string;
+				meta?: {
+					event?: { type?: string };
+				};
+		  }>
+		| null = null;
 	let payloadSummaryCount: number | null = null;
 	const contentType = request.headers.get("Content-Type") || "";
 	if (contentType.includes("application/json")) {
 		const body = (await request.json()) as {
 			conversationId?: string;
-			messages?: Array<{ role: string; content: string }>;
+			messages?: Array<{
+				role: string;
+				content: string;
+				meta?: { event?: { type?: string } };
+			}>;
 			summaryMessageCount?: number;
 		};
 		conversationId = body.conversationId?.trim() || null;
@@ -40,7 +56,12 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const messagesSource = payloadMessages || conversation.messages;
-	if (!messagesSource.length) {
+	const activeMessages = getMessagesInActiveContext(messagesSource);
+	const compactMessages = activeMessages.filter(
+		(message): message is { role: "user" | "assistant"; content: string } =>
+			isChatTurnMessage(message),
+	);
+	if (!compactMessages.length) {
 		return new Response("No messages to compact", { status: 400 });
 	}
 
@@ -64,7 +85,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 					: conversation.summaryMessageCount ?? 0,
 			)
 		: 0;
-	const newMessages = messagesSource.slice(startIndex);
+	const boundedStartIndex = Math.min(startIndex, compactMessages.length);
+	const newMessages = compactMessages.slice(boundedStartIndex);
 
 	if (!newMessages.length && baseSummary) {
 		return Response.json(
@@ -73,7 +95,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 				summary: baseSummary,
 				summaryUpdatedAt: conversation.summaryUpdatedAt ?? now,
 				summaryMessageCount:
-					conversation.summaryMessageCount ?? messagesSource.length,
+					conversation.summaryMessageCount ?? compactMessages.length,
 			},
 			{ headers: { "Cache-Control": "no-store" } },
 		);
@@ -99,14 +121,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const summary = await summarizeConversation({
 		env,
 		baseSummary,
-		messages: newMessages.length ? newMessages : messagesSource,
+		messages: newMessages.length ? newMessages : compactMessages,
 	});
 
 	if (!summary) {
 		return new Response("Failed to generate summary", { status: 500 });
 	}
 
-	const summaryMessageCount = messagesSource.length;
+	const summaryMessageCount = compactMessages.length;
 	await updateConversationSummary(
 		context.db,
 		user.id,

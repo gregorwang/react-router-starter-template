@@ -6,10 +6,18 @@ import {
 import { generateConversationTitle } from "../lib/llm/title.server";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
 import { requireAuth } from "../lib/auth.server";
+import {
+	getMessagesInActiveContext,
+	isChatTurnMessage,
+} from "../lib/chat/context-boundary";
 
 type TitlePayload = {
 	conversationId?: string;
-	messages?: Array<{ role: string; content: string }>;
+	messages?: Array<{
+		role: string;
+		content: string;
+		meta?: { event?: { type?: string } };
+	}>;
 	force?: boolean;
 };
 
@@ -67,8 +75,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 		payload.messages && payload.messages.length > 0
 			? payload.messages
 			: conversation.messages;
-
-	const messages = trimMessages(messagesSource);
+	const activeMessages = getMessagesInActiveContext(messagesSource);
+	const messages = trimMessages(activeMessages.filter(isChatTurnMessage));
 	if (messages.length === 0) {
 		return new Response("Missing messages", { status: 400 });
 	}

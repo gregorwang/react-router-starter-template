@@ -26,7 +26,7 @@ export type ConversationId = string;
 
 export interface Message {
 	id: string;
-	role: "user" | "assistant";
+	role: "user" | "assistant" | "system";
 	content: string;
 	timestamp: number;
 	meta?: MessageMeta;
@@ -41,6 +41,9 @@ export interface Conversation {
 	provider: LLMProvider;
 	model: string;
 	projectId?: string;
+	forkedFromConversationId?: string;
+	forkedFromMessageId?: string;
+	forkedAt?: number;
 	createdAt: number;
 	updatedAt: number;
 	summary?: string;
@@ -87,6 +90,10 @@ export interface Usage {
 export interface MessageMeta {
 	model?: string;
 	provider?: LLMProvider;
+	event?: {
+		type: "context_cleared";
+		at: number;
+	};
 	usage?: Usage;
 	credits?: number;
 	reasoning?: string;

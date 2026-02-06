@@ -2,10 +2,20 @@ import { MessageList } from "./MessageList";
 import { InputArea } from "./InputArea";
 import { cn } from "../../lib/utils/cn";
 import { useChat } from "../../contexts/ChatContext";
-import { PROVIDER_MODELS, PROVIDER_NAMES, type LLMProvider } from "../../lib/llm/types";
+import {
+	PROVIDER_MODELS,
+	PROVIDER_NAMES,
+	type LLMProvider,
+	type Message,
+} from "../../lib/llm/types";
 import { useTheme } from "../../hooks/useTheme";
 import { useState } from "react";
 import { format } from "date-fns";
+import {
+	createContextClearedEventMessage,
+	getMessagesInActiveContext,
+	isChatTurnMessage,
+} from "../../lib/chat/context-boundary";
 
 interface ChatContainerProps {
 	className?: string;
@@ -30,6 +40,7 @@ export function ChatContainer({
 	const { theme, toggleTheme } = useTheme();
 	const [isCompacting, setIsCompacting] = useState(false);
 	const [isArchiving, setIsArchiving] = useState(false);
+	const [isClearingContext, setIsClearingContext] = useState(false);
 
 	const isProviderAvailable = (provider: LLMProvider) => {
 		if (!providerAvailability) return true;
@@ -73,6 +84,10 @@ export function ChatContainer({
 				? getUnavailableMessage(currentConversation.provider)
 				: "当前模型未授权或已被管理员禁用。"
 			: undefined;
+	const activeContextMessageCount = currentConversation
+		? getMessagesInActiveContext(currentConversation.messages).filter(isChatTurnMessage)
+				.length
+		: 0;
 
 	const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		if (!currentConversation) return;
@@ -145,12 +160,70 @@ export function ChatContainer({
 		}
 	};
 
+	const handleClearContext = async () => {
+		if (!currentConversation || isClearingContext || isStreaming) return;
+
+		const confirmed =
+			currentConversation.messages.length === 0 ||
+			window.confirm(
+				"清除后，后续回复将不再使用当前分隔线之前的对话上下文。是否继续？",
+			);
+		if (!confirmed) return;
+
+		setIsClearingContext(true);
+		try {
+			const response = await fetch("/conversations/clear-context", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ conversationId: currentConversation.id }),
+			});
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(errorText || `Server error: ${response.status}`);
+			}
+
+			const data = (await response.json()) as {
+				message?: Message;
+				clearedAt?: number;
+			};
+			const marker =
+				data.message ||
+				createContextClearedEventMessage(data.clearedAt || Date.now());
+			setCurrentConversation((prev) => {
+				if (!prev || prev.id !== currentConversation.id) return prev;
+				return {
+					...prev,
+					messages: [...prev.messages, marker],
+					summary: undefined,
+					summaryUpdatedAt: undefined,
+					summaryMessageCount: undefined,
+					updatedAt: marker.timestamp,
+				};
+			});
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : "清除上下文失败";
+			alert(message);
+		} finally {
+			setIsClearingContext(false);
+		}
+	};
+
 	const summaryLabel =
 		currentConversation?.summaryUpdatedAt
 			? `已压缩 ${format(
 					new Date(currentConversation.summaryUpdatedAt),
 					"yyyy-MM-dd HH:mm",
 				)} · 覆盖 ${currentConversation.summaryMessageCount ?? 0} 条`
+			: null;
+	const forkNotice =
+		currentConversation?.forkedFromConversationId &&
+		currentConversation?.forkedFromMessageId
+			? `Forked from ${currentConversation.forkedFromConversationId} at message ${currentConversation.forkedFromMessageId}${
+					currentConversation.forkedAt
+						? ` (${format(new Date(currentConversation.forkedAt), "yyyy-MM-dd HH:mm:ss")})`
+						: ""
+				}`
 			: null;
 
 	return (
@@ -245,12 +318,22 @@ export function ChatContainer({
 
 					<button
 						type="button"
+						onClick={handleClearContext}
+						disabled={!currentConversation || isStreaming || isClearingContext}
+						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						title="开始新的上下文段，后续请求不再携带此前消息"
+					>
+						{isClearingContext ? "清除中..." : "清除上下文"}
+					</button>
+
+					<button
+						type="button"
 						onClick={handleCompact}
 						disabled={
 							!currentConversation ||
 							isStreaming ||
 							isCompacting ||
-							currentConversation.messages.length < 2
+							activeContextMessageCount < 2
 						}
 						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
 						title="将当前对话压缩为摘要，用于后续上下文"
@@ -511,6 +594,11 @@ export function ChatContainer({
 					)}
 				</button>
 			</div>
+			{forkNotice && (
+				<div className="px-4 md:px-6 py-2 border-b border-white/60 dark:border-neutral-800/70 bg-amber-50/70 dark:bg-amber-950/20 text-xs text-amber-700 dark:text-amber-300">
+					{forkNotice}
+				</div>
+			)}
 
 			<div className="flex-1 min-h-0 overflow-hidden">
 				<MessageList />

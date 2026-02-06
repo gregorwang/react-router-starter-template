@@ -1,9 +1,13 @@
 import { useCallback, useRef } from "react";
 import { useChat as useChatContext } from "../contexts/ChatContext";
+import {
+	getContextSegmentStartIndex,
+	isChatTurnMessage,
+} from "../lib/chat/context-boundary";
 
 import type { ImageAttachment, LLMMessage, Message } from "../lib/llm/types";
 
-type ChatMessage = Pick<Message, "role" | "content">;
+type ChatMessage = { role: "user" | "assistant"; content: string };
 type ChatPayloadMessage = LLMMessage;
 
 export function useChat() {
@@ -194,7 +198,13 @@ export function useChat() {
 			setStreaming(true);
 
 			const conversationId = currentConversation.id;
-			const summaryMessageCount = currentConversation.summaryMessageCount ?? 0;
+			const contextStartIndex = getContextSegmentStartIndex(
+				currentConversation.messages,
+			);
+			const hasContextBoundary = contextStartIndex > 0;
+			const summaryMessageCount = hasContextBoundary
+				? 0
+				: currentConversation.summaryMessageCount ?? 0;
 			const isFirstTurn = currentConversation.messages.length === 0;
 
 			// Create message IDs upfront
@@ -233,25 +243,26 @@ export function useChat() {
 
 			try {
 				// Prepare messages for LLM (exclude the empty assistant message we just added)
-				const rawMessages: ChatMessage[] = currentConversation.messages
+				const segmentMessages = currentConversation.messages
 					.concat([userMessage])
-					.map((msg) => ({
+					.slice(contextStartIndex)
+					.filter(isChatTurnMessage);
+				const rawMessages: ChatMessage[] = segmentMessages.map((msg) => ({
+					role: msg.role,
+					content: msg.content,
+				}));
+				const rawPayloadMessages: ChatPayloadMessage[] = segmentMessages.map((msg) => {
+					const attachments = msg.meta?.attachments?.filter((item) => item.data);
+					return {
 						role: msg.role,
 						content: msg.content,
-					}));
-				const rawPayloadMessages: ChatPayloadMessage[] =
-					currentConversation.messages.concat([userMessage]).map((msg) => {
-						const attachments = msg.meta?.attachments?.filter((item) => item.data);
-						return {
-							role: msg.role,
-							content: msg.content,
-							attachments: attachments && attachments.length > 0 ? attachments : undefined,
-						};
-					});
+						attachments: attachments && attachments.length > 0 ? attachments : undefined,
+					};
+				});
 				let payloadMessages = rawPayloadMessages;
 				let messagesTrimmed = false;
 
-				if (currentConversation.summary) {
+				if (!hasContextBoundary && currentConversation.summary) {
 					const startIndex = Math.min(summaryMessageCount, rawMessages.length);
 					payloadMessages = rawPayloadMessages.slice(startIndex);
 					messagesTrimmed = true;

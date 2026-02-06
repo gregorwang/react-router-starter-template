@@ -51,6 +51,9 @@ export interface DBConversation {
 	title: string;
 	provider: string;
 	model: string;
+	forked_from_conversation_id?: string;
+	forked_from_message_id?: string;
+	forked_at?: number;
 	created_at: number;
 	updated_at: number;
 	summary?: string;
@@ -100,6 +103,9 @@ export async function getConversations(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
+		forkedFromMessageId: row.forked_from_message_id ?? undefined,
+		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		summary: row.summary || undefined,
@@ -136,6 +142,9 @@ export async function getConversationIndex(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
+		forkedFromMessageId: row.forked_from_message_id ?? undefined,
+		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		summary: row.summary || undefined,
@@ -177,6 +186,9 @@ export async function getConversation(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
+		forkedFromMessageId: row.forked_from_message_id ?? undefined,
+		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		summary: row.summary || undefined,
@@ -254,19 +266,25 @@ export async function saveConversation(
 					title,
 					provider,
 					model,
+					forked_from_conversation_id,
+					forked_from_message_id,
+					forked_at,
 					created_at,
 					updated_at,
 					summary,
 					summary_updated_at,
 					summary_message_count
 				)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				user_id = excluded.user_id,
 				project_id = excluded.project_id,
 				title = excluded.title,
 				provider = excluded.provider,
 				model = excluded.model,
+				forked_from_conversation_id = COALESCE(excluded.forked_from_conversation_id, forked_from_conversation_id),
+				forked_from_message_id = COALESCE(excluded.forked_from_message_id, forked_from_message_id),
+				forked_at = COALESCE(excluded.forked_at, forked_at),
 				updated_at = excluded.updated_at,
 				summary = COALESCE(excluded.summary, summary),
 				summary_updated_at = COALESCE(excluded.summary_updated_at, summary_updated_at),
@@ -279,6 +297,9 @@ export async function saveConversation(
 				conversation.title,
 				conversation.provider,
 				conversation.model,
+				conversation.forkedFromConversationId ?? null,
+				conversation.forkedFromMessageId ?? null,
+				conversation.forkedAt ?? null,
 				conversation.createdAt,
 				conversation.updatedAt,
 				conversation.summary ?? null,
@@ -325,11 +346,13 @@ export async function appendConversationMessages(
 		title?: string;
 		provider?: string;
 		model?: string;
+		resetSummary?: boolean;
 	},
 	messages: Message[],
 ): Promise<void> {
 	const statements: D1PreparedStatement[] = [];
-	const { updatedAt, title, provider, model } = options;
+	const { updatedAt, title, provider, model, resetSummary } = options;
+	const shouldResetSummary = resetSummary ? 1 : 0;
 
 	statements.push(
 		db
@@ -338,7 +361,10 @@ export async function appendConversationMessages(
 				SET title = COALESCE(?, title),
 					provider = COALESCE(?, provider),
 					model = COALESCE(?, model),
-					updated_at = ?
+					updated_at = ?,
+					summary = CASE WHEN ? = 1 THEN NULL ELSE summary END,
+					summary_updated_at = CASE WHEN ? = 1 THEN NULL ELSE summary_updated_at END,
+					summary_message_count = CASE WHEN ? = 1 THEN NULL ELSE summary_message_count END
 				WHERE id = ? AND user_id = ?`,
 			)
 			.bind(
@@ -346,6 +372,9 @@ export async function appendConversationMessages(
 				provider ?? null,
 				model ?? null,
 				updatedAt,
+				shouldResetSummary,
+				shouldResetSummary,
+				shouldResetSummary,
 				conversationId,
 				userId,
 			),
@@ -437,6 +466,9 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 				title TEXT NOT NULL,
 				provider TEXT NOT NULL,
 				model TEXT NOT NULL,
+				forked_from_conversation_id TEXT,
+				forked_from_message_id TEXT,
+				forked_at INTEGER,
 				created_at INTEGER NOT NULL,
 				updated_at INTEGER NOT NULL,
 				summary TEXT,
@@ -569,6 +601,24 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 
 	try {
 		await db.prepare("ALTER TABLE conversations ADD COLUMN summary_message_count INTEGER").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_from_conversation_id TEXT").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_from_message_id TEXT").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_at INTEGER").run();
 	} catch {
 		// Column already exists
 	}
