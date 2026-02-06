@@ -45,7 +45,11 @@ export function MessageBubble({
 		return urls.filter((url) => /^https?:\/\//i.test(url));
 	}, [message.meta?.webSearch?.citations]);
 	const searchProviderLabel =
-		message.meta?.webSearch?.provider === "claude" ? "Claude 搜索" : "X 搜索";
+		message.meta?.webSearch?.provider === "claude"
+			? "Claude 搜索"
+			: message.meta?.webSearch?.provider === "xai"
+				? "xAI 网页搜索"
+				: "X 搜索";
 
 	const handleCopy = async () => {
 		try {

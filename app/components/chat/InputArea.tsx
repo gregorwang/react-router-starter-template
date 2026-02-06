@@ -9,12 +9,13 @@ const MAX_INPUT_CHARS = 20000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 4;
-const ALLOWED_IMAGE_TYPES = new Set([
+const DEFAULT_ALLOWED_IMAGE_TYPES = new Set([
 	"image/jpeg",
 	"image/png",
 	"image/webp",
 	"image/gif",
 ]);
+const XAI_ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 
 export function InputArea({
 	providerAvailable = true,
@@ -30,7 +31,17 @@ export function InputArea({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { sendMessage, currentConversation, abortGeneration } = useChat();
 	const { isStreaming } = useChatContext();
-	const canUploadImage = currentConversation?.provider === "poloai";
+	const isXAIConversation = currentConversation?.provider === "xai";
+	const canUploadImage =
+		currentConversation?.provider === "poloai" ||
+		currentConversation?.provider === "xai";
+	const allowedImageTypes = isXAIConversation
+		? XAI_ALLOWED_IMAGE_TYPES
+		: DEFAULT_ALLOWED_IMAGE_TYPES;
+	const acceptedImageTypes = isXAIConversation
+		? "image/png,image/jpeg"
+		: "image/png,image/jpeg,image/webp,image/gif";
+	const imageFormatHint = isXAIConversation ? "JPG/PNG" : "JPG/PNG/GIF/WebP";
 
 	useEffect(() => {
 		if (textareaRef.current) {
@@ -105,8 +116,8 @@ export function InputArea({
 			);
 			let nextTotalBytes = currentTotalBytes;
 			for (const file of queue) {
-				if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-					setAttachmentError("仅支持 JPG/PNG/GIF/WebP 图片格式。");
+				if (!allowedImageTypes.has(file.type)) {
+					setAttachmentError(`仅支持 ${imageFormatHint} 图片格式。`);
 					continue;
 				}
 				if (file.size > MAX_IMAGE_BYTES) {
@@ -148,7 +159,7 @@ export function InputArea({
 				setAttachments((prev) => [...prev, ...next].slice(0, MAX_IMAGES));
 			}
 		},
-		[attachments],
+		[attachments, allowedImageTypes, imageFormatHint],
 	);
 
 	const handleAttachmentChange = async (
@@ -277,7 +288,7 @@ export function InputArea({
 			<input
 				ref={fileInputRef}
 				type="file"
-				accept="image/png,image/jpeg,image/webp,image/gif"
+				accept={acceptedImageTypes}
 				multiple
 				className="hidden"
 				onChange={handleAttachmentChange}
@@ -297,7 +308,7 @@ export function InputArea({
 			)}
 			{canUploadImage && (
 				<p className="mt-2 text-xs text-neutral-400">
-					最多 {MAX_IMAGES} 张图片，支持上传或直接粘贴，单张不超过 5MB，总计不超过 10MB（JPG/PNG/GIF/WebP）。
+					最多 {MAX_IMAGES} 张图片，支持上传或直接粘贴，单张不超过 5MB，总计不超过 10MB（{imageFormatHint}）。
 				</p>
 			)}
 		</form>

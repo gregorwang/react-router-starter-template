@@ -190,10 +190,7 @@ async function streamXAIServer(
 	options?: { webSearch?: boolean },
 ): Promise<void> {
 	const useResponsesApi = true;
-	const input = messages.map((message) => ({
-		role: message.role,
-		content: message.content,
-	}));
+	const input = buildXAIResponsesInput(messages);
 
 	if (useResponsesApi) {
 		const body: Record<string, unknown> = {
@@ -204,7 +201,7 @@ async function streamXAIServer(
 		};
 
 		if (options?.webSearch) {
-			body.tools = [{ type: "x_search" }];
+			body.tools = [{ type: "web_search" }];
 			body.tool_choice = "auto";
 			body.include = ["inline_citations"];
 		}
@@ -221,26 +218,27 @@ async function streamXAIServer(
 		if (!response.ok && options?.webSearch) {
 			const fallbackBody = { ...body };
 			delete fallbackBody.include;
-			response = await fetch("https://api.x.ai/v1/responses", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${apiKey}`,
-				},
-				body: JSON.stringify(fallbackBody),
-			});
-			if (!response.ok) {
-				const noToolsBody = { ...fallbackBody };
-				delete noToolsBody.tools;
-				delete noToolsBody.tool_choice;
+
+			const legacySearchBody = {
+				...fallbackBody,
+				tools: [{ type: "x_search" }],
+				tool_choice: "auto",
+			};
+			const noToolsBody = { ...fallbackBody };
+			delete noToolsBody.tools;
+			delete noToolsBody.tool_choice;
+
+			const candidates = [fallbackBody, legacySearchBody, noToolsBody];
+			for (const candidate of candidates) {
 				response = await fetch("https://api.x.ai/v1/responses", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
 						Authorization: `Bearer ${apiKey}`,
 					},
-					body: JSON.stringify(noToolsBody),
+					body: JSON.stringify(candidate),
 				});
+				if (response.ok) break;
 			}
 		}
 
@@ -327,17 +325,14 @@ async function streamXAIServer(
 	}
 
 	const body: Record<string, unknown> = {
-		messages: messages.map((message) => ({
-			role: message.role,
-			content: message.content,
-		})),
+		messages: buildXAIChatMessages(messages),
 		model,
 		stream: true,
 		temperature: 0,
 	};
 
 	if (options?.webSearch) {
-		body.tools = [{ type: "x_search" }];
+		body.tools = [{ type: "web_search" }];
 		body.tool_choice = "auto";
 	}
 
@@ -351,17 +346,23 @@ async function streamXAIServer(
 	});
 
 	if (!response.ok && options?.webSearch) {
-		const fallbackBody = { ...body };
-		delete fallbackBody.tools;
-		delete fallbackBody.tool_choice;
-		response = await fetch("https://api.x.ai/v1/chat/completions", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify(fallbackBody),
-		});
+		const legacySearchBody = { ...body, tools: [{ type: "x_search" }] };
+		const noToolsBody = { ...body };
+		delete noToolsBody.tools;
+		delete noToolsBody.tool_choice;
+
+		const candidates = [legacySearchBody, noToolsBody];
+		for (const candidate of candidates) {
+			response = await fetch("https://api.x.ai/v1/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${apiKey}`,
+				},
+				body: JSON.stringify(candidate),
+			});
+			if (response.ok) break;
+		}
 	}
 
 	if (!response.ok) {
@@ -384,6 +385,64 @@ async function streamXAIServer(
 		if (credits) {
 			await writeEvent({ type: "credits", credits });
 		}
+	});
+}
+
+function buildXAIResponsesInput(messages: LLMMessage[]) {
+	return messages.map((message) => {
+		const attachments = (message.attachments ?? []).filter((item) => item.data);
+		if (!attachments.length) {
+			return { role: message.role, content: message.content };
+		}
+
+		const content: Array<Record<string, unknown>> = [];
+		if (message.content.trim()) {
+			content.push({ type: "input_text", text: message.content });
+		}
+
+		for (const attachment of attachments) {
+			if (!attachment?.data) continue;
+			content.push({
+				type: "input_image",
+				image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+			});
+		}
+
+		if (!content.length) {
+			content.push({ type: "input_text", text: "" });
+		}
+
+		return { role: message.role, content };
+	});
+}
+
+function buildXAIChatMessages(messages: LLMMessage[]) {
+	return messages.map((message) => {
+		const attachments = (message.attachments ?? []).filter((item) => item.data);
+		if (!attachments.length) {
+			return { role: message.role, content: message.content };
+		}
+
+		const content: Array<Record<string, unknown>> = [];
+		if (message.content.trim()) {
+			content.push({ type: "text", text: message.content });
+		}
+
+		for (const attachment of attachments) {
+			if (!attachment?.data) continue;
+			content.push({
+				type: "image_url",
+				image_url: {
+					url: `data:${attachment.mimeType};base64,${attachment.data}`,
+				},
+			});
+		}
+
+		if (!content.length) {
+			content.push({ type: "text", text: "" });
+		}
+
+		return { role: message.role, content };
 	});
 }
 

@@ -455,7 +455,7 @@ export function ChatContainer({
 								}
 							/>
 							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
-								X 搜索
+								网页搜索
 							</span>
 						</label>
 					)}

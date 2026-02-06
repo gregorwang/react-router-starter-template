@@ -467,12 +467,16 @@ function validateChatActionData(data: ChatActionData): string | null {
 	const hasAttachments = data.messages.some(
 		(message) => Array.isArray(message.attachments) && message.attachments.length > 0,
 	);
-	if (hasAttachments && data.provider !== "poloai") {
+	if (hasAttachments && data.provider !== "poloai" && data.provider !== "xai") {
 		return "Images not supported for this provider";
 	}
 	let totalChars = 0;
 	let totalImageBytes = 0;
 	const allowedRoles = new Set(["user", "assistant", "system"]);
+	const allowedImageMimeTypes =
+		data.provider === "xai"
+			? new Set(["image/jpeg", "image/png"])
+			: new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 	for (const message of data.messages) {
 		if (!message || typeof message.content !== "string" || !message.role) {
 			return "Invalid message format";
@@ -502,14 +506,7 @@ function validateChatActionData(data: ChatActionData): string | null {
 				) {
 					return "Invalid attachment format";
 				}
-				if (
-					![
-						"image/jpeg",
-						"image/png",
-						"image/gif",
-						"image/webp",
-					].includes(attachment.mimeType)
-				) {
+				if (!allowedImageMimeTypes.has(attachment.mimeType)) {
 					return "Unsupported image type";
 				}
 				const base64 = attachment.data.replace(/\s+/g, "");
