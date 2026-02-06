@@ -62,38 +62,12 @@ async function deriveKeyWebCrypto(
 	);
 }
 
-async function deriveKeyNode(
-	password: string,
-	salt: Uint8Array,
-	iterations: number,
-): Promise<ArrayBuffer | null> {
-	try {
-		const nodeCrypto = await import("node:crypto");
-		const derived = nodeCrypto.pbkdf2Sync(
-			password,
-			Buffer.from(salt),
-			iterations,
-			KEY_LENGTH,
-			"sha256",
-		);
-		return derived.buffer.slice(derived.byteOffset, derived.byteOffset + derived.byteLength);
-	} catch {
-		return null;
-	}
-}
-
 async function deriveKey(
 	password: string,
 	salt: Uint8Array,
 	iterations: number,
 ): Promise<ArrayBuffer> {
-	try {
-		return await deriveKeyWebCrypto(password, salt, iterations);
-	} catch {
-		const fallback = await deriveKeyNode(password, salt, iterations);
-		if (fallback) return fallback;
-		throw new Error("Password derivation failed");
-	}
+	return deriveKeyWebCrypto(password, salt, iterations);
 }
 
 export async function hashPassword(password: string) {
@@ -114,17 +88,13 @@ export async function verifyPassword(password: string, storedHash: string) {
 	const salt = fromBase64(parts[2]);
 	const expected = parts[3];
 	try {
-		const derived = await deriveKeyWebCrypto(password, salt, iterations);
+		const derived = await deriveKey(password, salt, iterations);
 		const actual = toBase64(derived);
 		if (timingSafeEqual(actual, expected)) return true;
 	} catch {
-		// Fall through to Node.js crypto fallback below.
+		return false;
 	}
-
-	const fallback = await deriveKeyNode(password, salt, iterations);
-	if (!fallback) return false;
-	const actual = toBase64(fallback);
-	return timingSafeEqual(actual, expected);
+	return false;
 }
 
 function timingSafeEqual(a: string, b: string) {

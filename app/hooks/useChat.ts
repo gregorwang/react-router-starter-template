@@ -47,7 +47,7 @@ export function useChat() {
 
 		const keepMin = Math.min(minKeep, messages.length);
 		let totalChars = 0;
-		const kept: ChatMessage[] = [];
+		const kept: T[] = [];
 
 		for (let i = messages.length - 1; i >= 0; i -= 1) {
 			const message = messages[i];

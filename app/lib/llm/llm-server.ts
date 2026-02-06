@@ -1171,7 +1171,9 @@ function extractClaudeSearchFromBlocks(blocks: Array<Record<string, any>>) {
 	};
 }
 
-type SearchResult = NonNullable<LLMStreamEvent["search"]>["results"][number];
+type SearchResult = NonNullable<
+	NonNullable<LLMStreamEvent["search"]>["results"]
+>[number];
 
 function mergeSearchMeta(
 	base: LLMStreamEvent["search"] | undefined,
