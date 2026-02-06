@@ -9,13 +9,22 @@ const MAX_INPUT_CHARS = 20000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 4;
-const DEFAULT_ALLOWED_IMAGE_TYPES = new Set([
+const XAI_ALLOWED_ATTACHMENT_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"application/pdf",
+	"text/plain",
+	"text/markdown",
+	"text/csv",
+	"application/json",
+]);
+const POLO_ALLOWED_ATTACHMENT_TYPES = new Set([
 	"image/jpeg",
 	"image/png",
 	"image/webp",
 	"image/gif",
+	"application/pdf",
 ]);
-const XAI_ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 
 export function InputArea({
 	providerAvailable = true,
@@ -32,16 +41,18 @@ export function InputArea({
 	const { sendMessage, currentConversation, abortGeneration } = useChat();
 	const { isStreaming } = useChatContext();
 	const isXAIConversation = currentConversation?.provider === "xai";
-	const canUploadImage =
+	const canUploadAttachment =
 		currentConversation?.provider === "poloai" ||
 		currentConversation?.provider === "xai";
-	const allowedImageTypes = isXAIConversation
-		? XAI_ALLOWED_IMAGE_TYPES
-		: DEFAULT_ALLOWED_IMAGE_TYPES;
-	const acceptedImageTypes = isXAIConversation
-		? "image/png,image/jpeg"
-		: "image/png,image/jpeg,image/webp,image/gif";
-	const imageFormatHint = isXAIConversation ? "JPG/PNG" : "JPG/PNG/GIF/WebP";
+	const allowedAttachmentTypes = isXAIConversation
+		? XAI_ALLOWED_ATTACHMENT_TYPES
+		: POLO_ALLOWED_ATTACHMENT_TYPES;
+	const acceptedAttachmentTypes = isXAIConversation
+		? "image/png,image/jpeg,application/pdf,text/plain,text/markdown,text/csv,application/json"
+		: "image/png,image/jpeg,image/webp,image/gif,application/pdf";
+	const attachmentFormatHint = isXAIConversation
+		? "JPG/PNG/PDF/TXT/MD/CSV/JSON"
+		: "JPG/PNG/GIF/WebP/PDF";
 
 	useEffect(() => {
 		if (textareaRef.current) {
@@ -92,7 +103,7 @@ export function InputArea({
 	const isTooLong = input.length > MAX_INPUT_CHARS;
 
 	const handleAttachmentClick = () => {
-		if (isStreaming || !canUploadImage) return;
+		if (isStreaming || !canUploadAttachment) return;
 		fileInputRef.current?.click();
 	};
 
@@ -106,7 +117,7 @@ export function InputArea({
 			const queue = files.slice(0, remaining);
 			const overshoot = files.length - queue.length;
 			if (overshoot > 0) {
-				setAttachmentError(`最多支持 ${MAX_IMAGES} 张图片，已忽略多余文件。`);
+				setAttachmentError(`最多支持 ${MAX_IMAGES} 个附件，已忽略多余文件。`);
 			}
 
 			const next: ImageAttachment[] = [];
@@ -116,16 +127,16 @@ export function InputArea({
 			);
 			let nextTotalBytes = currentTotalBytes;
 			for (const file of queue) {
-				if (!allowedImageTypes.has(file.type)) {
-					setAttachmentError(`仅支持 ${imageFormatHint} 图片格式。`);
+				if (!allowedAttachmentTypes.has(file.type)) {
+					setAttachmentError(`仅支持 ${attachmentFormatHint} 格式。`);
 					continue;
 				}
 				if (file.size > MAX_IMAGE_BYTES) {
-					setAttachmentError("单张图片不能超过 5MB。");
+					setAttachmentError("单个附件不能超过 5MB。");
 					continue;
 				}
 				if (nextTotalBytes + file.size > MAX_TOTAL_IMAGE_BYTES) {
-					setAttachmentError("图片总大小不能超过 10MB。");
+					setAttachmentError("附件总大小不能超过 10MB。");
 					continue;
 				}
 
@@ -141,7 +152,7 @@ export function InputArea({
 				});
 
 				if (!base64) {
-					setAttachmentError("图片读取失败，请重试。");
+					setAttachmentError("附件读取失败，请重试。");
 					continue;
 				}
 
@@ -159,7 +170,7 @@ export function InputArea({
 				setAttachments((prev) => [...prev, ...next].slice(0, MAX_IMAGES));
 			}
 		},
-		[attachments, allowedImageTypes, imageFormatHint],
+		[attachments, allowedAttachmentTypes, attachmentFormatHint],
 	);
 
 	const handleAttachmentChange = async (
@@ -174,7 +185,7 @@ export function InputArea({
 	};
 
 	const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-		if (!canUploadImage || !providerAvailable || isStreaming) return;
+		if (!canUploadAttachment || !providerAvailable || isStreaming) return;
 		const items = Array.from(e.clipboardData.items || []);
 		const files = items
 			.filter((item) => item.kind === "file")
@@ -202,24 +213,51 @@ export function InputArea({
 				{attachments.length > 0 && (
 					<div className="px-3 pt-3 pr-16 flex flex-wrap gap-2">
 						{attachments.map((attachment) => (
-							<div
-								key={attachment.id}
-								className="relative w-20 h-20 rounded-xl overflow-hidden border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60"
-							>
-								<img
-									src={`data:${attachment.mimeType};base64,${attachment.data}`}
-									alt={attachment.name || "上传图片"}
-									className="w-full h-full object-cover"
-								/>
-								<button
-									type="button"
-									onClick={() => handleRemoveAttachment(attachment.id)}
-									className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75"
-									aria-label="移除图片"
+							attachment.mimeType.startsWith("image/") ? (
+								<div
+									key={attachment.id}
+									className="relative w-20 h-20 rounded-xl overflow-hidden border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60"
 								>
-									×
-								</button>
-							</div>
+									<img
+										src={`data:${attachment.mimeType};base64,${attachment.data}`}
+										alt={attachment.name || "上传图片"}
+										className="w-full h-full object-cover"
+									/>
+									<button
+										type="button"
+										onClick={() => handleRemoveAttachment(attachment.id)}
+										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75"
+										aria-label="移除附件"
+									>
+										×
+									</button>
+								</div>
+							) : (
+								<div
+									key={attachment.id}
+									className="relative h-20 min-w-40 max-w-52 rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 pr-8 flex items-center gap-2"
+								>
+									<div className="w-8 h-8 rounded-lg bg-neutral-200/80 dark:bg-neutral-700/80 flex items-center justify-center text-[10px] font-semibold text-neutral-700 dark:text-neutral-200">
+										FILE
+									</div>
+									<div className="min-w-0">
+										<p className="text-xs text-neutral-700 dark:text-neutral-200 truncate">
+											{attachment.name || "附件"}
+										</p>
+										<p className="text-[11px] text-neutral-500 truncate">
+											{attachment.mimeType}
+										</p>
+									</div>
+									<button
+										type="button"
+										onClick={() => handleRemoveAttachment(attachment.id)}
+										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75"
+										aria-label="移除附件"
+									>
+										×
+									</button>
+								</div>
+							)
 						))}
 					</div>
 				)}
@@ -242,14 +280,14 @@ export function InputArea({
 						<button
 							type="button"
 							onClick={handleAttachmentClick}
-							disabled={!canUploadImage || isStreaming || !providerAvailable}
+							disabled={!canUploadAttachment || isStreaming || !providerAvailable}
 							className={cn(
 								"w-9 h-9 rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 text-neutral-600 dark:text-neutral-300 bg-white/70 dark:bg-neutral-900/60 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
-								(!canUploadImage || !providerAvailable) &&
+								(!canUploadAttachment || !providerAvailable) &&
 									"opacity-50 cursor-not-allowed",
 							)}
-							aria-label="上传图片"
-							title={canUploadImage ? "上传图片" : "当前模型不支持图片输入"}
+							aria-label="上传附件"
+							title={canUploadAttachment ? "上传附件" : "当前模型不支持附件输入"}
 						>
 							<svg
 								viewBox="0 0 24 24"
@@ -288,7 +326,7 @@ export function InputArea({
 			<input
 				ref={fileInputRef}
 				type="file"
-				accept={acceptedImageTypes}
+				accept={acceptedAttachmentTypes}
 				multiple
 				className="hidden"
 				onChange={handleAttachmentChange}
@@ -306,9 +344,9 @@ export function InputArea({
 					当前输入 {input.length} 字符，已超过上限 {MAX_INPUT_CHARS}。
 				</p>
 			)}
-			{canUploadImage && (
+			{canUploadAttachment && (
 				<p className="mt-2 text-xs text-neutral-400">
-					最多 {MAX_IMAGES} 张图片，支持上传或直接粘贴，单张不超过 5MB，总计不超过 10MB（{imageFormatHint}）。
+					最多 {MAX_IMAGES} 个附件，支持上传（图片支持粘贴），单个不超过 5MB，总计不超过 10MB（{attachmentFormatHint}）。
 				</p>
 			)}
 		</form>

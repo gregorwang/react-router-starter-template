@@ -174,6 +174,24 @@ export function MessageBubble({
 								? `data:${attachment.mimeType};base64,${attachment.data}`
 								: attachment.url;
 							if (!src) return null;
+							if (!attachment.mimeType.startsWith("image/")) {
+								return (
+									<a
+										key={attachment.id}
+										href={src}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/40 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/60 text-xs text-neutral-700 dark:text-neutral-200 hover:border-brand-400/60"
+									>
+										<span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-200/70 dark:bg-neutral-700/70">
+											FILE
+										</span>
+										<span className="truncate max-w-40">
+											{attachment.name || "附件"}
+										</span>
+									</a>
+								);
+							}
 							return (
 								<img
 									key={attachment.id}

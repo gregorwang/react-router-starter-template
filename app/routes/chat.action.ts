@@ -50,6 +50,22 @@ const PROMPT_TOKEN_BUDGET = 3500;
 const MIN_CONTEXT_MESSAGES = 4;
 
 const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
+const XAI_ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"application/pdf",
+	"text/plain",
+	"text/markdown",
+	"text/csv",
+	"application/json",
+]);
+const POLO_ALLOWED_ATTACHMENT_MIME_TYPES = new Set([
+	"image/jpeg",
+	"image/png",
+	"image/gif",
+	"image/webp",
+	"application/pdf",
+]);
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -486,15 +502,15 @@ function validateChatActionData(data: ChatActionData): string | null {
 		(message) => Array.isArray(message.attachments) && message.attachments.length > 0,
 	);
 	if (hasAttachments && data.provider !== "poloai" && data.provider !== "xai") {
-		return "Images not supported for this provider";
+		return "Attachments not supported for this provider";
 	}
 	let totalChars = 0;
 	let totalImageBytes = 0;
 	const allowedRoles = new Set(["user", "assistant", "system"]);
 	const allowedImageMimeTypes =
 		data.provider === "xai"
-			? new Set(["image/jpeg", "image/png"])
-			: new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+			? XAI_ALLOWED_ATTACHMENT_MIME_TYPES
+			: POLO_ALLOWED_ATTACHMENT_MIME_TYPES;
 	for (const message of data.messages) {
 		if (!message || typeof message.content !== "string" || !message.role) {
 			return "Invalid message format";
@@ -578,7 +594,7 @@ async function readSseStream(
 	}
 }
 
-function getImageExtension(mimeType: string) {
+function getAttachmentExtension(mimeType: string) {
 	switch (mimeType) {
 		case "image/jpeg":
 			return "jpg";
@@ -588,6 +604,16 @@ function getImageExtension(mimeType: string) {
 			return "webp";
 		case "image/gif":
 			return "gif";
+		case "application/pdf":
+			return "pdf";
+		case "text/plain":
+			return "txt";
+		case "text/markdown":
+			return "md";
+		case "text/csv":
+			return "csv";
+		case "application/json":
+			return "json";
 		default:
 			return "bin";
 	}
@@ -617,8 +643,8 @@ async function persistAttachmentsToR2(options: {
 	const stored: ImageAttachment[] = [];
 	for (const attachment of options.attachments) {
 		if (!attachment.data) continue;
-		const ext = getImageExtension(attachment.mimeType);
-		const key = `img_${options.userId}_${options.conversationId}_${attachment.id}.${ext}`;
+		const ext = getAttachmentExtension(attachment.mimeType);
+		const key = `att_${options.userId}_${options.conversationId}_${attachment.id}.${ext}`;
 		const bytes = decodeBase64ToUint8Array(attachment.data);
 		await options.env.CHAT_MEDIA.put(key, bytes, {
 			httpMetadata: { contentType: attachment.mimeType },

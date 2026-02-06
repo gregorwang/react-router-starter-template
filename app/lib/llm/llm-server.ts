@@ -192,151 +192,155 @@ async function streamXAIServer(
 	options?: { webSearch?: boolean; xaiSearchMode?: XAISearchMode },
 ): Promise<void> {
 	const useResponsesApi = true;
-	const input = buildXAIResponsesInput(messages);
 	const searchEnabled = options?.webSearch === true;
 	const searchMode = normalizeXAISearchMode(options?.xaiSearchMode);
 	const toolVariants = searchEnabled ? buildXAIToolVariants(searchMode) : [];
 	const requestedTools = toolVariants[0] ?? [];
 
 	if (useResponsesApi) {
+		const preparedInput = await prepareXAIResponsesInput(messages, apiKey);
 		const body: Record<string, unknown> = {
 			model,
-			input,
+			input: preparedInput.input,
 			stream: true,
 			temperature: 0,
 		};
 
-		if (requestedTools.length > 0) {
-			body.tools = requestedTools;
-			body.tool_choice = "auto";
-			body.include = ["inline_citations"];
-		}
-
-		let response = await fetch("https://api.x.ai/v1/responses", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${apiKey}`,
-			},
-			body: JSON.stringify(body),
-		});
-
-		if (!response.ok && searchEnabled) {
-			const fallbackToolVariants = toolVariants
-				.slice(1)
-				.filter((tools) => !sameXAITools(tools, requestedTools));
-			const candidates: Array<Record<string, unknown>> = [];
-
+		try {
 			if (requestedTools.length > 0) {
-				const sameToolsWithoutInclude = { ...body };
-				delete sameToolsWithoutInclude.include;
-				candidates.push(sameToolsWithoutInclude);
+				body.tools = requestedTools;
+				body.tool_choice = "auto";
+				body.include = ["inline_citations"];
 			}
 
-			for (const tools of fallbackToolVariants) {
-				const candidate: Record<string, unknown> = { ...body };
-				delete candidate.include;
-				if (tools.length > 0) {
-					candidate.tools = tools;
-					candidate.tool_choice = "auto";
-				} else {
-					delete candidate.tools;
-					delete candidate.tool_choice;
+			let response = await fetch("https://api.x.ai/v1/responses", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${apiKey}`,
+				},
+				body: JSON.stringify(body),
+			});
+
+			if (!response.ok && searchEnabled) {
+				const fallbackToolVariants = toolVariants
+					.slice(1)
+					.filter((tools) => !sameXAITools(tools, requestedTools));
+				const candidates: Array<Record<string, unknown>> = [];
+
+				if (requestedTools.length > 0) {
+					const sameToolsWithoutInclude = { ...body };
+					delete sameToolsWithoutInclude.include;
+					candidates.push(sameToolsWithoutInclude);
 				}
-				candidates.push(candidate);
+
+				for (const tools of fallbackToolVariants) {
+					const candidate: Record<string, unknown> = { ...body };
+					delete candidate.include;
+					if (tools.length > 0) {
+						candidate.tools = tools;
+						candidate.tool_choice = "auto";
+					} else {
+						delete candidate.tools;
+						delete candidate.tool_choice;
+					}
+					candidates.push(candidate);
+				}
+
+				for (const candidate of candidates) {
+					response = await fetch("https://api.x.ai/v1/responses", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${apiKey}`,
+						},
+						body: JSON.stringify(candidate),
+					});
+					if (response.ok) break;
+				}
 			}
 
-			for (const candidate of candidates) {
-				response = await fetch("https://api.x.ai/v1/responses", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${apiKey}`,
-					},
-					body: JSON.stringify(candidate),
-				});
-				if (response.ok) break;
-			}
-		}
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			throw new Error(`xAI API error: ${response.status} - ${errorText}`);
-		}
-
-		const contentType = response.headers.get("Content-Type") || "";
-		if (!contentType.includes("text/event-stream")) {
-			const data = (await response.json()) as any;
-			const content = extractXAIResponseText(data);
-			const usage = normalizeUsage(data?.usage ?? data?.response?.usage);
-			const credits = data?.credits ?? data?.usage?.credits;
-			const citations = extractXAICitations(data?.response ?? data);
-
-			if (citations?.length) {
-				await writeEvent({
-					type: "search",
-					search: { provider: "xai", citations },
-				});
-			}
-			if (content) {
-				await writeEvent({ type: "delta", content });
-			}
-			if (usage) {
-				await writeEvent({ type: "usage", usage });
-			}
-			if (credits) {
-				await writeEvent({ type: "credits", credits });
-			}
-			return;
-		}
-
-		let sawDelta = false;
-		await processSSEStream(response, async (parsed) => {
-			const eventType = parsed?.type;
-
-			if (eventType === "response.output_text.delta" && parsed.delta) {
-				sawDelta = true;
-				await writeEvent({ type: "delta", content: parsed.delta });
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`xAI API error: ${response.status} - ${errorText}`);
 			}
 
-			if (eventType === "response.completed" && parsed.response) {
-				const citations = extractXAICitations(parsed.response);
+			const contentType = response.headers.get("Content-Type") || "";
+			if (!contentType.includes("text/event-stream")) {
+				const data = (await response.json()) as any;
+				const content = extractXAIResponseText(data);
+				const usage = normalizeUsage(data?.usage ?? data?.response?.usage);
+				const credits = data?.credits ?? data?.usage?.credits;
+				const citations = extractXAICitations(data?.response ?? data);
+
 				if (citations?.length) {
 					await writeEvent({
 						type: "search",
 						search: { provider: "xai", citations },
 					});
 				}
-
-				const usage = normalizeUsage(parsed.response?.usage);
+				if (content) {
+					await writeEvent({ type: "delta", content });
+				}
 				if (usage) {
 					await writeEvent({ type: "usage", usage });
 				}
+				if (credits) {
+					await writeEvent({ type: "credits", credits });
+				}
+				return;
+			}
 
-				if (!sawDelta) {
-					const content = extractXAIResponseText(parsed.response);
-					if (content) {
-						await writeEvent({ type: "delta", content });
+			let sawDelta = false;
+			await processSSEStream(response, async (parsed) => {
+				const eventType = parsed?.type;
+
+				if (eventType === "response.output_text.delta" && parsed.delta) {
+					sawDelta = true;
+					await writeEvent({ type: "delta", content: parsed.delta });
+				}
+
+				if (eventType === "response.completed" && parsed.response) {
+					const citations = extractXAICitations(parsed.response);
+					if (citations?.length) {
+						await writeEvent({
+							type: "search",
+							search: { provider: "xai", citations },
+						});
+					}
+
+					const usage = normalizeUsage(parsed.response?.usage);
+					if (usage) {
+						await writeEvent({ type: "usage", usage });
+					}
+
+					if (!sawDelta) {
+						const content = extractXAIResponseText(parsed.response);
+						if (content) {
+							await writeEvent({ type: "delta", content });
+						}
 					}
 				}
-			}
 
-			const legacyDelta = parsed?.choices?.[0]?.delta?.content;
-			if (legacyDelta) {
-				sawDelta = true;
-				await writeEvent({ type: "delta", content: legacyDelta });
-			}
+				const legacyDelta = parsed?.choices?.[0]?.delta?.content;
+				if (legacyDelta) {
+					sawDelta = true;
+					await writeEvent({ type: "delta", content: legacyDelta });
+				}
 
-			const legacyUsage = normalizeUsage(parsed?.usage);
-			if (legacyUsage) {
-				await writeEvent({ type: "usage", usage: legacyUsage });
-			}
+				const legacyUsage = normalizeUsage(parsed?.usage);
+				if (legacyUsage) {
+					await writeEvent({ type: "usage", usage: legacyUsage });
+				}
 
-			const legacyCredits = parsed?.credits ?? parsed?.usage?.credits;
-			if (legacyCredits) {
-				await writeEvent({ type: "credits", credits: legacyCredits });
-			}
-		});
+				const legacyCredits = parsed?.credits ?? parsed?.usage?.credits;
+				if (legacyCredits) {
+					await writeEvent({ type: "credits", credits: legacyCredits });
+				}
+			});
+		} finally {
+			await cleanupXAIUploadedFiles(apiKey, preparedInput.uploadedFileIds);
+		}
 
 		return;
 	}
@@ -413,11 +417,21 @@ async function streamXAIServer(
 	});
 }
 
-function buildXAIResponsesInput(messages: LLMMessage[]) {
-	return messages.map((message) => {
+async function prepareXAIResponsesInput(
+	messages: LLMMessage[],
+	apiKey: string,
+): Promise<{
+	input: Array<Record<string, unknown>>;
+	uploadedFileIds: string[];
+}> {
+	const uploadedFileIds: string[] = [];
+	const input: Array<Record<string, unknown>> = [];
+
+	for (const message of messages) {
 		const attachments = (message.attachments ?? []).filter((item) => item.data);
 		if (!attachments.length) {
-			return { role: message.role, content: message.content };
+			input.push({ role: message.role, content: message.content });
+			continue;
 		}
 
 		const content: Array<Record<string, unknown>> = [];
@@ -427,18 +441,27 @@ function buildXAIResponsesInput(messages: LLMMessage[]) {
 
 		for (const attachment of attachments) {
 			if (!attachment?.data) continue;
-			content.push({
-				type: "input_image",
-				image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
-			});
+			if (attachment.mimeType.startsWith("image/")) {
+				content.push({
+					type: "input_image",
+					image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+				});
+				continue;
+			}
+
+			const fileId = await uploadXAIFile(apiKey, attachment);
+			uploadedFileIds.push(fileId);
+			content.push({ type: "input_file", file_id: fileId });
 		}
 
 		if (!content.length) {
 			content.push({ type: "input_text", text: "" });
 		}
 
-		return { role: message.role, content };
-	});
+		input.push({ role: message.role, content });
+	}
+
+	return { input, uploadedFileIds };
 }
 
 function buildXAIChatMessages(messages: LLMMessage[]) {
@@ -455,6 +478,15 @@ function buildXAIChatMessages(messages: LLMMessage[]) {
 
 		for (const attachment of attachments) {
 			if (!attachment?.data) continue;
+			if (!attachment.mimeType.startsWith("image/")) {
+				if (attachment.name) {
+					content.push({
+						type: "text",
+						text: `[Attached file: ${attachment.name}]`,
+					});
+				}
+				continue;
+			}
 			content.push({
 				type: "image_url",
 				image_url: {
@@ -502,6 +534,95 @@ function sameXAITools(a: XAIToolSpec[], b: XAIToolSpec[]) {
 		if (a[i]?.type !== b[i]?.type) return false;
 	}
 	return true;
+}
+
+function decodeBase64ToUint8Array(base64: string) {
+	const normalized = base64.replace(/\s+/g, "");
+	const binary = atob(normalized);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i += 1) {
+		bytes[i] = binary.charCodeAt(i);
+	}
+	return bytes;
+}
+
+function inferAttachmentExtension(mimeType: string) {
+	switch (mimeType) {
+		case "application/pdf":
+			return "pdf";
+		case "text/plain":
+			return "txt";
+		case "text/markdown":
+			return "md";
+		case "text/csv":
+			return "csv";
+		case "application/json":
+			return "json";
+		default:
+			return "bin";
+	}
+}
+
+function getAttachmentFileName(
+	attachment: NonNullable<LLMMessage["attachments"]>[number],
+) {
+	if (attachment.name && attachment.name.trim()) return attachment.name.trim();
+	const ext = inferAttachmentExtension(attachment.mimeType);
+	return `attachment-${attachment.id}.${ext}`;
+}
+
+async function uploadXAIFile(
+	apiKey: string,
+	attachment: NonNullable<LLMMessage["attachments"]>[number],
+) {
+	if (!attachment.data) {
+		throw new Error("Missing attachment data");
+	}
+	const bytes = decodeBase64ToUint8Array(attachment.data);
+	const file = new File([bytes], getAttachmentFileName(attachment), {
+		type: attachment.mimeType,
+	});
+	const form = new FormData();
+	form.set("file", file);
+
+	const response = await fetch("https://api.x.ai/v1/files", {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: form,
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`xAI files upload error: ${response.status} - ${errorText}`);
+	}
+
+	const payload = (await response.json()) as any;
+	const id =
+		typeof payload?.id === "string"
+			? payload.id
+			: typeof payload?.file?.id === "string"
+				? payload.file.id
+				: null;
+	if (!id) {
+		throw new Error("xAI files upload error: missing file id");
+	}
+	return id;
+}
+
+async function cleanupXAIUploadedFiles(apiKey: string, fileIds: string[]) {
+	if (!fileIds.length) return;
+	await Promise.allSettled(
+		fileIds.map((id) =>
+			fetch(`https://api.x.ai/v1/files/${encodeURIComponent(id)}`, {
+				method: "DELETE",
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+				},
+			}),
+		),
+	);
 }
 
 async function streamPoeServer(
@@ -1195,14 +1316,27 @@ function buildPoloAIMessages(messages: LLMMessage[]) {
 		}
 		for (const attachment of attachments) {
 			if (!attachment?.data) continue;
-			blocks.push({
-				type: "image",
-				source: {
-					type: "base64",
-					media_type: attachment.mimeType,
-					data: attachment.data,
-				},
-			});
+			if (attachment.mimeType.startsWith("image/")) {
+				blocks.push({
+					type: "image",
+					source: {
+						type: "base64",
+						media_type: attachment.mimeType,
+						data: attachment.data,
+					},
+				});
+				continue;
+			}
+			if (attachment.mimeType === "application/pdf") {
+				blocks.push({
+					type: "document",
+					source: {
+						type: "base64",
+						media_type: attachment.mimeType,
+						data: attachment.data,
+					},
+				});
+			}
 		}
 		return { role: message.role, content: blocks.length ? blocks : message.content };
 	});

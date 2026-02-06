@@ -8,7 +8,16 @@ export type LLMProvider =
 
 export interface ImageAttachment {
 	id: string;
-	mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+	mimeType:
+		| "image/jpeg"
+		| "image/png"
+		| "image/gif"
+		| "image/webp"
+		| "application/pdf"
+		| "text/plain"
+		| "text/markdown"
+		| "text/csv"
+		| "application/json";
 	data?: string;
 	name?: string;
 	size?: number;
