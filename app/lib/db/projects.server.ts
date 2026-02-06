@@ -71,6 +71,33 @@ export async function createProject(
 		.run();
 }
 
+export async function renameProject(
+	db: D1Database,
+	id: string,
+	userId: string,
+	name: string,
+): Promise<void> {
+	await db
+		.prepare(
+			`UPDATE projects
+			SET name = ?, updated_at = ?
+			WHERE id = ? AND user_id = ?`,
+		)
+		.bind(name, Date.now(), id, userId)
+		.run();
+}
+
+export async function deleteProject(
+	db: D1Database,
+	id: string,
+	userId: string,
+): Promise<void> {
+	await db
+		.prepare("DELETE FROM projects WHERE id = ? AND user_id = ?")
+		.bind(id, userId)
+		.run();
+}
+
 export async function ensureDefaultProject(
 	db: D1Database,
 	userId: string,

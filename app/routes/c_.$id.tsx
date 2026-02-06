@@ -6,6 +6,7 @@ import { redirect, useLocation, useNavigate, useSearchParams } from "react-route
 import { useChat } from "../contexts/ChatContext";
 import {
 	getConversation,
+	getProjectConversationCounts,
 } from "../lib/db/conversations.server";
 import { getConversationIndexCached } from "../lib/cache/conversation-index.server";
 import { getProjects } from "../lib/db/projects.server";
@@ -44,10 +45,11 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		return redirect(`/c/${newId}?project=${fallbackProjectId}`);
 	}
 
-	const [projects, existingConversation, modelLimits] = await Promise.all([
+	const [projects, existingConversation, modelLimits, projectCounts] = await Promise.all([
 		projectsPromise,
 		getConversation(context.db, user.id, conversationId),
 		modelLimitsPromise,
+		getProjectConversationCounts(context.db, user.id),
 	]);
 	const fallbackProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
 
@@ -92,6 +94,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		conversation,
 		projects,
 		activeProjectId,
+		projectCounts,
 		currentUser: user,
 		modelAvailability: modelLimits.reduce(
 			(acc, limit) => {
@@ -125,20 +128,23 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 		conversation,
 		conversations,
 		projects,
+		projectCounts,
 		activeProjectId,
 		currentUser,
 		modelAvailability,
 	} = loaderData;
 	const [conversationList, setConversationList] = useState(conversations);
+	const [projectList, setProjectList] = useState(projects);
+	const [projectCountMap, setProjectCountMap] = useState(projectCounts);
 	const providerAvailability = loaderData.providerAvailability;
 
 	const activeProjectName = useMemo(
 		() => {
-			const active = projects.find((project) => project.id === activeProjectId);
+			const active = projectList.find((project) => project.id === activeProjectId);
 			if (active?.isDefault) return "模型选择";
-			return projects.find((project) => project.id === activeProjectId)?.name || "项目";
+			return projectList.find((project) => project.id === activeProjectId)?.name || "项目";
 		},
-		[projects, activeProjectId],
+		[projectList, activeProjectId],
 	);
 
 	// Load conversation into context when component mounts or conversation changes
@@ -155,6 +161,14 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	useEffect(() => {
 		setConversationList(conversations);
 	}, [conversations]);
+
+	useEffect(() => {
+		setProjectList(projects);
+	}, [projects]);
+
+	useEffect(() => {
+		setProjectCountMap(projectCounts);
+	}, [projectCounts]);
 
 	useEffect(() => {
 		if (!currentConversation) return;
@@ -232,7 +246,13 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 			<Sidebar
 				onNewChat={handleNewChat}
 				conversations={conversationList}
-				projects={projects}
+				onConversationsChange={setConversationList}
+				projects={projectList}
+				onProjectsChange={setProjectList}
+				projectCounts={projectCountMap}
+				onProjectCountsChange={setProjectCountMap}
+				currentUser={currentUser}
+				activeConversationId={conversationId}
 				activeProjectId={activeProjectId}
 				onProjectChange={handleProjectChange}
 				onNewProject={handleCreateProject}

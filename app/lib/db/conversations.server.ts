@@ -51,6 +51,9 @@ export interface DBConversation {
 	title: string;
 	provider: string;
 	model: string;
+	is_archived?: number;
+	is_pinned?: number;
+	pinned_at?: number;
 	forked_from_conversation_id?: string;
 	forked_from_message_id?: string;
 	forked_at?: number;
@@ -84,11 +87,11 @@ export async function getConversations(
 	const statement = projectId
 		? db
 				.prepare(
-					`${baseQuery} WHERE c.user_id = ? AND c.project_id = ? GROUP BY c.id ORDER BY c.updated_at DESC`,
+					`${baseQuery} WHERE c.user_id = ? AND c.project_id = ? GROUP BY c.id ORDER BY COALESCE(c.is_pinned, 0) DESC, COALESCE(c.pinned_at, 0) DESC, c.updated_at DESC`,
 				)
 				.bind(userId, projectId)
 		: db.prepare(
-				`${baseQuery} WHERE c.user_id = ? GROUP BY c.id ORDER BY c.updated_at DESC`,
+				`${baseQuery} WHERE c.user_id = ? GROUP BY c.id ORDER BY COALESCE(c.is_pinned, 0) DESC, COALESCE(c.pinned_at, 0) DESC, c.updated_at DESC`,
 			)
 				.bind(userId);
 
@@ -103,6 +106,9 @@ export async function getConversations(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		isArchived: Boolean(row.is_archived),
+		isPinned: Boolean(row.is_pinned),
+		pinnedAt: row.pinned_at ?? undefined,
 		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
 		forkedFromMessageId: row.forked_from_message_id ?? undefined,
 		forkedAt: row.forked_at ?? undefined,
@@ -124,11 +130,11 @@ export async function getConversationIndex(
 	const statement = projectId
 		? db
 				.prepare(
-					"SELECT * FROM conversations WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC",
+					"SELECT * FROM conversations WHERE user_id = ? AND project_id = ? ORDER BY COALESCE(is_pinned, 0) DESC, COALESCE(pinned_at, 0) DESC, updated_at DESC",
 				)
 				.bind(userId, projectId)
 		: db.prepare(
-				"SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC",
+				"SELECT * FROM conversations WHERE user_id = ? ORDER BY COALESCE(is_pinned, 0) DESC, COALESCE(pinned_at, 0) DESC, updated_at DESC",
 			).bind(userId);
 
 	const result = await statement.all();
@@ -142,6 +148,9 @@ export async function getConversationIndex(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		isArchived: Boolean(row.is_archived),
+		isPinned: Boolean(row.is_pinned),
+		pinnedAt: row.pinned_at ?? undefined,
 		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
 		forkedFromMessageId: row.forked_from_message_id ?? undefined,
 		forkedAt: row.forked_at ?? undefined,
@@ -186,6 +195,9 @@ export async function getConversation(
 		title: row.title,
 		provider: row.provider,
 		model: row.model,
+		isArchived: Boolean(row.is_archived),
+		isPinned: Boolean(row.is_pinned),
+		pinnedAt: row.pinned_at ?? undefined,
 		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
 		forkedFromMessageId: row.forked_from_message_id ?? undefined,
 		forkedAt: row.forked_at ?? undefined,
@@ -248,6 +260,130 @@ export async function getProjectUsageTotals(
 	};
 }
 
+export type ConversationSearchResult = {
+	id: string;
+	projectId: string;
+	title: string;
+	updatedAt: number;
+	isArchived: boolean;
+	isPinned: boolean;
+	pinnedAt?: number;
+	snippet?: string;
+};
+
+function escapeLikePattern(input: string) {
+	return input.replace(/[\\%_]/g, "\\$&");
+}
+
+export async function searchConversations(
+	db: D1Database,
+	options: {
+		userId: string;
+		query: string;
+		projectId?: string;
+		limit?: number;
+	},
+): Promise<ConversationSearchResult[]> {
+	const normalizedQuery = options.query.trim().toLowerCase();
+	if (!normalizedQuery) return [];
+
+	const safeLimit = Math.max(1, Math.min(options.limit ?? 30, 50));
+	const scopeProjectId = options.projectId?.trim() || null;
+	const like = `%${escapeLikePattern(normalizedQuery)}%`;
+
+	const result = await db
+		.prepare(
+			`SELECT
+				c.id,
+				c.project_id,
+				c.title,
+				c.updated_at,
+				c.is_archived,
+				c.is_pinned,
+				c.pinned_at,
+				CASE WHEN lower(c.title) LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END +
+				CASE WHEN EXISTS (
+					SELECT 1
+					FROM messages m
+					WHERE m.conversation_id = c.id
+						AND lower(m.content) LIKE ? ESCAPE '\\'
+				) THEN 1 ELSE 0 END AS score,
+				(
+					SELECT substr(m.content, 1, 120)
+					FROM messages m
+					WHERE m.conversation_id = c.id
+						AND lower(m.content) LIKE ? ESCAPE '\\'
+					ORDER BY m.timestamp DESC
+					LIMIT 1
+				) AS snippet
+			FROM conversations c
+			WHERE c.user_id = ?
+				AND (? IS NULL OR c.project_id = ?)
+				AND (
+					lower(c.title) LIKE ? ESCAPE '\\'
+					OR EXISTS (
+						SELECT 1
+						FROM messages m
+						WHERE m.conversation_id = c.id
+							AND lower(m.content) LIKE ? ESCAPE '\\'
+					)
+				)
+			ORDER BY score DESC, COALESCE(c.is_pinned, 0) DESC, COALESCE(c.pinned_at, 0) DESC, c.updated_at DESC
+			LIMIT ?`,
+		)
+		.bind(
+			like,
+			like,
+			like,
+			options.userId,
+			scopeProjectId,
+			scopeProjectId,
+			like,
+			like,
+			safeLimit,
+		)
+		.all();
+	logD1("searchConversations", result.meta, {
+		projectId: scopeProjectId ?? "all",
+		limit: safeLimit,
+	});
+
+	return (result.results || []).map((row: any) => ({
+		id: row.id,
+		projectId: row.project_id,
+		title: row.title,
+		updatedAt: row.updated_at,
+		isArchived: Boolean(row.is_archived),
+		isPinned: Boolean(row.is_pinned),
+		pinnedAt: row.pinned_at ?? undefined,
+		snippet: row.snippet ?? undefined,
+	}));
+}
+
+export async function getProjectConversationCounts(
+	db: D1Database,
+	userId: string,
+): Promise<Record<string, number>> {
+	const result = await db
+		.prepare(
+			`SELECT project_id, COUNT(id) AS count
+			FROM conversations
+			WHERE user_id = ?
+			GROUP BY project_id`,
+		)
+		.bind(userId)
+		.all();
+	logD1("getProjectConversationCounts", result.meta);
+
+	const counts: Record<string, number> = {};
+	for (const row of result.results || []) {
+		const item = row as { project_id?: string; count?: number };
+		if (!item.project_id) continue;
+		counts[item.project_id] = Number(item.count || 0);
+	}
+	return counts;
+}
+
 export async function saveConversation(
 	db: D1Database,
 	conversation: Conversation,
@@ -266,6 +402,9 @@ export async function saveConversation(
 					title,
 					provider,
 					model,
+					is_archived,
+					is_pinned,
+					pinned_at,
 					forked_from_conversation_id,
 					forked_from_message_id,
 					forked_at,
@@ -275,13 +414,16 @@ export async function saveConversation(
 					summary_updated_at,
 					summary_message_count
 				)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				user_id = excluded.user_id,
 				project_id = excluded.project_id,
 				title = excluded.title,
 				provider = excluded.provider,
 				model = excluded.model,
+				is_archived = excluded.is_archived,
+				is_pinned = excluded.is_pinned,
+				pinned_at = excluded.pinned_at,
 				forked_from_conversation_id = COALESCE(excluded.forked_from_conversation_id, forked_from_conversation_id),
 				forked_from_message_id = COALESCE(excluded.forked_from_message_id, forked_from_message_id),
 				forked_at = COALESCE(excluded.forked_at, forked_at),
@@ -297,6 +439,9 @@ export async function saveConversation(
 				conversation.title,
 				conversation.provider,
 				conversation.model,
+				conversation.isArchived ? 1 : 0,
+				conversation.isPinned ? 1 : 0,
+				conversation.isPinned ? (conversation.pinnedAt ?? Date.now()) : null,
 				conversation.forkedFromConversationId ?? null,
 				conversation.forkedFromMessageId ?? null,
 				conversation.forkedAt ?? null,
@@ -442,6 +587,81 @@ export async function updateConversationTitle(
 		.run();
 }
 
+export async function updateConversationMetadata(
+	db: D1Database,
+	userId: string,
+	id: string,
+	options: {
+		title?: string;
+		isArchived?: boolean;
+		isPinned?: boolean;
+		projectId?: string;
+		updatedAt: number;
+	},
+): Promise<void> {
+	const pinFlag =
+		options.isPinned === undefined ? null : options.isPinned ? 1 : 0;
+	const pinnedAt = options.isPinned ? options.updatedAt : null;
+
+	await db
+		.prepare(
+			`UPDATE conversations
+			SET title = COALESCE(?, title),
+				project_id = COALESCE(?, project_id),
+				is_archived = COALESCE(?, is_archived),
+				is_pinned = COALESCE(?, is_pinned),
+				pinned_at = CASE
+					WHEN ? IS NULL THEN pinned_at
+					WHEN ? = 1 THEN COALESCE(?, pinned_at, ?)
+					ELSE NULL
+				END,
+				updated_at = ?
+			WHERE id = ? AND user_id = ?`,
+		)
+		.bind(
+			options.title ?? null,
+			options.projectId ?? null,
+			options.isArchived === undefined ? null : options.isArchived ? 1 : 0,
+			pinFlag,
+			pinFlag,
+			pinFlag,
+			pinnedAt,
+			options.updatedAt,
+			options.updatedAt,
+			id,
+			userId,
+		)
+		.run();
+}
+
+export async function moveProjectConversations(
+	db: D1Database,
+	userId: string,
+	fromProjectId: string,
+	toProjectId: string,
+	updatedAt: number,
+): Promise<void> {
+	await db
+		.prepare(
+			`UPDATE conversations
+			SET project_id = ?, updated_at = ?
+			WHERE user_id = ? AND project_id = ?`,
+		)
+		.bind(toProjectId, updatedAt, userId, fromProjectId)
+		.run();
+}
+
+export async function deleteConversationsByProject(
+	db: D1Database,
+	userId: string,
+	projectId: string,
+): Promise<void> {
+	await db
+		.prepare("DELETE FROM conversations WHERE user_id = ? AND project_id = ?")
+		.bind(userId, projectId)
+		.run();
+}
+
 export async function deleteConversation(
 	db: D1Database,
 	userId: string,
@@ -466,6 +686,9 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 				title TEXT NOT NULL,
 				provider TEXT NOT NULL,
 				model TEXT NOT NULL,
+				is_archived INTEGER NOT NULL DEFAULT 0,
+				is_pinned INTEGER NOT NULL DEFAULT 0,
+				pinned_at INTEGER,
 				forked_from_conversation_id TEXT,
 				forked_from_message_id TEXT,
 				forked_at INTEGER,
@@ -624,6 +847,24 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 	}
 
 	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
+		await db.prepare("ALTER TABLE conversations ADD COLUMN pinned_at INTEGER").run();
+	} catch {
+		// Column already exists
+	}
+
+	try {
 		await db.prepare("ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL").run();
 	} catch {
 		// Column already exists or table is new
@@ -707,6 +948,18 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 	await db
 		.prepare(
 			"CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id)",
+		)
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(is_archived)",
+		)
+		.run();
+
+	await db
+		.prepare(
+			"CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, pinned_at DESC)",
 		)
 		.run();
 

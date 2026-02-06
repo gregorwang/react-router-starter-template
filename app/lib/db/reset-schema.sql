@@ -28,6 +28,9 @@ CREATE TABLE conversations (
     title TEXT NOT NULL,
     provider TEXT NOT NULL,
     model TEXT NOT NULL,
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    is_pinned INTEGER NOT NULL DEFAULT 0,
+    pinned_at INTEGER,
     forked_from_conversation_id TEXT,
     forked_from_message_id TEXT,
     forked_at INTEGER,
@@ -92,6 +95,8 @@ CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX idx_conversations_updated_at ON conversations(updated_at DESC);
 CREATE INDEX idx_conversations_project_id ON conversations(project_id);
 CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+CREATE INDEX idx_conversations_archived ON conversations(is_archived);
+CREATE INDEX idx_conversations_pinned ON conversations(is_pinned, pinned_at DESC);
 CREATE INDEX idx_projects_user_id ON projects(user_id);
 CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);

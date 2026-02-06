@@ -41,6 +41,9 @@ export interface Conversation {
 	provider: LLMProvider;
 	model: string;
 	projectId?: string;
+	isArchived?: boolean;
+	isPinned?: boolean;
+	pinnedAt?: number;
 	forkedFromConversationId?: string;
 	forkedFromMessageId?: string;
 	forkedAt?: number;
