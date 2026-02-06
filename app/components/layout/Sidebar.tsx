@@ -420,8 +420,8 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"w-72 h-screen bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out md:translate-x-0",
-				isOpen ? "translate-x-0" : "-translate-x-full",
+				"chat-sidebar-panel w-72 h-screen bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
+				isOpen && "is-open",
 				isCollapsed
 					? "md:w-0 md:opacity-0 md:pointer-events-none md:overflow-hidden md:border-r-0 md:shadow-none"
 					: "md:w-80 md:opacity-100",

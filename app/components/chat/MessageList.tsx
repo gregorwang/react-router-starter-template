@@ -105,9 +105,9 @@ export function MessageList() {
 	return (
 		<div
 			ref={scrollRef}
-			className="chat-scroll-container relative h-full min-h-0 overflow-y-auto overflow-x-hidden"
+			className="chat-scroll-container chat-message-scroll relative h-full min-h-0 overflow-y-auto overflow-x-auto"
 		>
-			<div className="w-full max-w-4xl mx-auto py-8 px-4 space-y-6">
+			<div className="w-full min-w-0 max-w-4xl mx-auto py-8 px-4 space-y-6">
 				{currentConversation.messages.map((message) => (
 					isContextClearedEventMessage(message) ? (
 						<div

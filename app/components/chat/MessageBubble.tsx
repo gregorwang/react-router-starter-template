@@ -64,7 +64,7 @@ export function MessageBubble({
 	return (
 		<div
 			className={cn(
-				"flex gap-4 w-full",
+				"flex items-start gap-4 w-full min-w-0",
 				isUser ? "flex-row-reverse" : "flex-row",
 			)}
 		>
@@ -84,7 +84,7 @@ export function MessageBubble({
 
 			<div
 				className={cn(
-					"max-w-3xl rounded-2xl px-4 py-4 overflow-hidden border transition-shadow duration-200 hover:shadow-md",
+					"min-w-0 max-w-[calc(100%-3rem)] sm:max-w-3xl rounded-2xl px-4 py-4 overflow-visible border transition-shadow duration-200 hover:shadow-md",
 					isUser
 						? "bg-brand-600 text-white border-brand-500/30 shadow-md shadow-brand-600/20"
 						: "bg-white/80 dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-white/60 dark:border-neutral-800/60 shadow-sm backdrop-blur",
@@ -162,7 +162,7 @@ export function MessageBubble({
 						<div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80 dark:text-amber-300/80">
 							思维链
 						</div>
-						<pre className="mt-2 whitespace-pre-wrap text-xs text-amber-900 dark:text-amber-100">
+						<pre className="mt-2 whitespace-pre-wrap overflow-x-auto text-xs text-amber-900 dark:text-amber-100">
 							{message.meta.reasoning}
 						</pre>
 					</div>
@@ -206,7 +206,7 @@ export function MessageBubble({
 				)}
 				{isUser ? (
 					message.content.trim().length > 0 && (
-						<p className="whitespace-pre-wrap">{message.content}</p>
+						<p className="whitespace-pre-wrap break-words">{message.content}</p>
 					)
 				) : showStreamingPlaceholder ? (
 					<div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">

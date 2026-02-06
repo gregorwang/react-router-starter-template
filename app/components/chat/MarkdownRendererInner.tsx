@@ -22,7 +22,7 @@ export default function MarkdownRendererInner({ content }: { content: string }) 
 	}, [content]);
 
 	return (
-		<div className="prose dark:prose-invert max-w-none">
+		<div className="prose dark:prose-invert max-w-none break-words">
 			<div
 				dangerouslySetInnerHTML={{
 					__html: html,

@@ -234,13 +234,13 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	}, [activeProjectId, location.pathname, navigate, searchParams]);
 
 	return (
-		<div className="flex h-screen min-h-0 overflow-hidden relative">
+		<div className="chat-layout flex h-screen min-h-0 overflow-hidden relative">
 			{sidebarOpen && (
 				<button
 					type="button"
 					aria-label="关闭侧边栏"
 					onClick={() => setSidebarOpen(false)}
-					className="fixed inset-0 bg-black/40 z-30 md:hidden"
+					className="chat-sidebar-backdrop fixed inset-0 bg-black/40 z-30 md:hidden"
 				/>
 			)}
 			<Sidebar
@@ -260,9 +260,9 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 				isOpen={sidebarOpen}
 				isCollapsed={sidebarCollapsed}
 				onClose={() => setSidebarOpen(false)}
-				className="fixed md:static inset-y-0 left-0 z-40"
 			/>
 			<ChatContainer
+				className="chat-main-panel"
 				onOpenSidebar={() => setSidebarOpen(true)}
 				onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
 				isSidebarCollapsed={sidebarCollapsed}

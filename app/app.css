@@ -214,10 +214,75 @@ html.dark body {
 
 .chat-scroll-container {
 	scrollbar-gutter: stable;
+	-webkit-overflow-scrolling: touch;
 }
 
 @supports (scrollbar-gutter: stable both-edges) {
 	.chat-scroll-container {
 		scrollbar-gutter: stable both-edges;
+	}
+}
+
+.chat-main-panel {
+	min-width: 0;
+	width: 100%;
+}
+
+.chat-sidebar-panel {
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 40;
+	transform: translate3d(-100%, 0, 0);
+	will-change: transform;
+	touch-action: pan-y;
+}
+
+.chat-sidebar-panel.is-open {
+	transform: translate3d(0, 0, 0);
+}
+
+.chat-message-scroll,
+.prose pre,
+.shiki {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior-x: contain;
+}
+
+.prose pre,
+.shiki {
+	max-width: 100%;
+}
+
+.prose pre code,
+.shiki code {
+	white-space: pre;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+@media (max-width: 767px) {
+	.chat-layout {
+		width: 100%;
+	}
+
+	.chat-main-panel {
+		flex: 1 1 100%;
+	}
+
+	.chat-scroll-container {
+		scrollbar-gutter: auto;
+	}
+
+	.chat-sidebar-backdrop {
+		backdrop-filter: blur(2px);
+		-webkit-backdrop-filter: blur(2px);
+	}
+}
+
+@media (min-width: 768px) {
+	.chat-sidebar-panel {
+		position: static;
+		transform: translate3d(0, 0, 0);
 	}
 }
