@@ -23,6 +23,7 @@ export interface LLMMessage {
 }
 
 export type ConversationId = string;
+export type XAISearchMode = "x" | "web" | "both";
 
 export interface Message {
 	id: string;
@@ -59,6 +60,7 @@ export interface Conversation {
 	outputTokens?: number;
 	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
+	xaiSearchMode?: XAISearchMode;
 	enableTools?: boolean;
 }
 

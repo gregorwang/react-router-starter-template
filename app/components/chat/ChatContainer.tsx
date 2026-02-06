@@ -7,6 +7,7 @@ import {
 	PROVIDER_NAMES,
 	type LLMProvider,
 	type Message,
+	type XAISearchMode,
 } from "../../lib/llm/types";
 import { useTheme } from "../../hooks/useTheme";
 import { useState } from "react";
@@ -92,10 +93,13 @@ export function ChatContainer({
 	const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		if (!currentConversation) return;
 		const [provider, model] = e.target.value.split(":");
+		const nextProvider = provider as LLMProvider;
 		setCurrentConversation({
 			...currentConversation,
-			provider: provider as LLMProvider,
+			provider: nextProvider,
 			model: model,
+			xaiSearchMode:
+				nextProvider === "xai" ? (currentConversation.xaiSearchMode ?? "x") : undefined,
 		});
 	};
 
@@ -442,22 +446,41 @@ export function ChatContainer({
 					)}
 
 					{currentConversation?.provider === "xai" && (
-						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
-							<input
-								type="checkbox"
-								className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
-								checked={currentConversation.webSearch ?? true}
-								onChange={(e) =>
-									setCurrentConversation({
-										...currentConversation,
-										webSearch: e.target.checked,
-									})
-								}
-							/>
-							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
-								网页搜索
-							</span>
-						</label>
+						<>
+							<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">
+								<input
+									type="checkbox"
+									className="w-3.5 h-3.5 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+									checked={currentConversation.webSearch ?? true}
+									onChange={(e) =>
+										setCurrentConversation({
+											...currentConversation,
+											webSearch: e.target.checked,
+											xaiSearchMode: currentConversation.xaiSearchMode ?? "x",
+										})
+									}
+								/>
+								<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
+									启用搜索
+								</span>
+							</label>
+							{(currentConversation.webSearch ?? true) && (
+								<select
+									className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+									value={currentConversation.xaiSearchMode ?? "x"}
+									onChange={(e) =>
+										setCurrentConversation({
+											...currentConversation,
+											xaiSearchMode: e.target.value as XAISearchMode,
+										})
+									}
+								>
+									<option value="x">仅 X 帖子</option>
+									<option value="web">仅网页</option>
+									<option value="both">网页 + X</option>
+								</select>
+							)}
+						</>
 					)}
 
 					{currentConversation?.provider === "poloai" &&

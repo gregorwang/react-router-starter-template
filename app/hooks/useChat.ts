@@ -304,6 +304,7 @@ export function useChat() {
 						outputTokens: currentConversation.outputTokens,
 						outputEffort: currentConversation.outputEffort,
 						webSearch: currentConversation.webSearch,
+						xaiSearchMode: currentConversation.xaiSearchMode,
 						enableTools: currentConversation.enableTools,
 					}),
 					signal: abortControllerRef.current.signal,

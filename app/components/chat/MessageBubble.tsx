@@ -48,7 +48,7 @@ export function MessageBubble({
 		message.meta?.webSearch?.provider === "claude"
 			? "Claude 搜索"
 			: message.meta?.webSearch?.provider === "xai"
-				? "xAI 网页搜索"
+				? "xAI 搜索"
 				: "X 搜索";
 
 	const handleCopy = async () => {

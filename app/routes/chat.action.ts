@@ -1,6 +1,12 @@
 import type { Route } from "./+types/chat.action";
 import { streamLLMFromServer } from "../lib/llm/llm-server";
-import type { ImageAttachment, LLMMessage, LLMProvider, Usage } from "../lib/llm/types";
+import type {
+	ImageAttachment,
+	LLMMessage,
+	LLMProvider,
+	Usage,
+	XAISearchMode,
+} from "../lib/llm/types";
 import { deriveConversationTitle } from "../lib/llm/title.server";
 import { invalidateConversationCaches } from "../lib/cache/conversation-index.server";
 import {
@@ -29,6 +35,7 @@ interface ChatActionData {
 	outputTokens?: number;
 	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
+	xaiSearchMode?: XAISearchMode;
 	enableTools?: boolean;
 }
 
@@ -84,6 +91,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			outputTokens,
 			outputEffort,
 			webSearch,
+			xaiSearchMode,
 			enableTools,
 		} = data;
 
@@ -288,6 +296,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			outputTokens,
 			outputEffort,
 			webSearch,
+			xaiSearchMode,
 			enableTools,
 		});
 
@@ -445,6 +454,15 @@ function validateChatActionData(data: ChatActionData): string | null {
 		return "Invalid payload";
 	}
 	if (data.enableTools !== undefined && typeof data.enableTools !== "boolean") {
+		return "Invalid payload";
+	}
+	if (
+		data.xaiSearchMode !== undefined &&
+		!["x", "web", "both"].includes(data.xaiSearchMode)
+	) {
+		return "Invalid payload";
+	}
+	if (data.xaiSearchMode !== undefined && data.provider !== "xai") {
 		return "Invalid payload";
 	}
 	if (!Array.isArray(data.messages) || data.messages.length === 0) {

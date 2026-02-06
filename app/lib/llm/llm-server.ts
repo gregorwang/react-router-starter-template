@@ -1,5 +1,5 @@
 import type { AppLoadContext } from "react-router";
-import type { LLMMessage, LLMProvider, Usage } from "./types";
+import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
 
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
@@ -37,6 +37,7 @@ export async function streamLLMFromServer(
 		outputTokens?: number;
 		outputEffort?: "low" | "medium" | "high" | "max";
 		webSearch?: boolean;
+		xaiSearchMode?: XAISearchMode;
 		enableTools?: boolean;
 	},
 ): Promise<ReadableStream<Uint8Array>> {
@@ -99,6 +100,7 @@ export async function streamLLMFromServer(
 				case "xai":
 					await streamXAIServer(requestMessages, model, apiKey!, writeEvent, {
 						webSearch: options?.webSearch,
+						xaiSearchMode: options?.xaiSearchMode,
 					});
 					break;
 				case "poe":
@@ -187,10 +189,14 @@ async function streamXAIServer(
 	model: string,
 	apiKey: string,
 	writeEvent: (event: LLMStreamEvent) => Promise<void>,
-	options?: { webSearch?: boolean },
+	options?: { webSearch?: boolean; xaiSearchMode?: XAISearchMode },
 ): Promise<void> {
 	const useResponsesApi = true;
 	const input = buildXAIResponsesInput(messages);
+	const searchEnabled = options?.webSearch === true;
+	const searchMode = normalizeXAISearchMode(options?.xaiSearchMode);
+	const toolVariants = searchEnabled ? buildXAIToolVariants(searchMode) : [];
+	const requestedTools = toolVariants[0] ?? [];
 
 	if (useResponsesApi) {
 		const body: Record<string, unknown> = {
@@ -200,8 +206,8 @@ async function streamXAIServer(
 			temperature: 0,
 		};
 
-		if (options?.webSearch) {
-			body.tools = [{ type: "web_search" }];
+		if (requestedTools.length > 0) {
+			body.tools = requestedTools;
 			body.tool_choice = "auto";
 			body.include = ["inline_citations"];
 		}
@@ -215,20 +221,31 @@ async function streamXAIServer(
 			body: JSON.stringify(body),
 		});
 
-		if (!response.ok && options?.webSearch) {
-			const fallbackBody = { ...body };
-			delete fallbackBody.include;
+		if (!response.ok && searchEnabled) {
+			const fallbackToolVariants = toolVariants
+				.slice(1)
+				.filter((tools) => !sameXAITools(tools, requestedTools));
+			const candidates: Array<Record<string, unknown>> = [];
 
-			const legacySearchBody = {
-				...fallbackBody,
-				tools: [{ type: "x_search" }],
-				tool_choice: "auto",
-			};
-			const noToolsBody = { ...fallbackBody };
-			delete noToolsBody.tools;
-			delete noToolsBody.tool_choice;
+			if (requestedTools.length > 0) {
+				const sameToolsWithoutInclude = { ...body };
+				delete sameToolsWithoutInclude.include;
+				candidates.push(sameToolsWithoutInclude);
+			}
 
-			const candidates = [fallbackBody, legacySearchBody, noToolsBody];
+			for (const tools of fallbackToolVariants) {
+				const candidate: Record<string, unknown> = { ...body };
+				delete candidate.include;
+				if (tools.length > 0) {
+					candidate.tools = tools;
+					candidate.tool_choice = "auto";
+				} else {
+					delete candidate.tools;
+					delete candidate.tool_choice;
+				}
+				candidates.push(candidate);
+			}
+
 			for (const candidate of candidates) {
 				response = await fetch("https://api.x.ai/v1/responses", {
 					method: "POST",
@@ -331,8 +348,8 @@ async function streamXAIServer(
 		temperature: 0,
 	};
 
-	if (options?.webSearch) {
-		body.tools = [{ type: "web_search" }];
+	if (requestedTools.length > 0) {
+		body.tools = requestedTools;
 		body.tool_choice = "auto";
 	}
 
@@ -345,13 +362,21 @@ async function streamXAIServer(
 		body: JSON.stringify(body),
 	});
 
-	if (!response.ok && options?.webSearch) {
-		const legacySearchBody = { ...body, tools: [{ type: "x_search" }] };
-		const noToolsBody = { ...body };
-		delete noToolsBody.tools;
-		delete noToolsBody.tool_choice;
-
-		const candidates = [legacySearchBody, noToolsBody];
+	if (!response.ok && searchEnabled) {
+		const fallbackToolVariants = toolVariants
+			.slice(1)
+			.filter((tools) => !sameXAITools(tools, requestedTools));
+		const candidates = fallbackToolVariants.map((tools) => {
+			const candidate: Record<string, unknown> = { ...body };
+			if (tools.length > 0) {
+				candidate.tools = tools;
+				candidate.tool_choice = "auto";
+			} else {
+				delete candidate.tools;
+				delete candidate.tool_choice;
+			}
+			return candidate;
+		});
 		for (const candidate of candidates) {
 			response = await fetch("https://api.x.ai/v1/chat/completions", {
 				method: "POST",
@@ -444,6 +469,39 @@ function buildXAIChatMessages(messages: LLMMessage[]) {
 
 		return { role: message.role, content };
 	});
+}
+
+type XAIToolType = "x_search" | "web_search";
+type XAIToolSpec = { type: XAIToolType };
+
+function normalizeXAISearchMode(mode?: XAISearchMode): XAISearchMode {
+	if (mode === "web" || mode === "both") return mode;
+	return "x";
+}
+
+function buildXAIToolVariants(mode: XAISearchMode): XAIToolSpec[][] {
+	switch (mode) {
+		case "web":
+			return [[{ type: "web_search" }], []];
+		case "both":
+			return [
+				[{ type: "web_search" }, { type: "x_search" }],
+				[{ type: "x_search" }],
+				[{ type: "web_search" }],
+				[],
+			];
+		case "x":
+		default:
+			return [[{ type: "x_search" }], []];
+	}
+}
+
+function sameXAITools(a: XAIToolSpec[], b: XAIToolSpec[]) {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i += 1) {
+		if (a[i]?.type !== b[i]?.type) return false;
+	}
+	return true;
 }
 
 async function streamPoeServer(
