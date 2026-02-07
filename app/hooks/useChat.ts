@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useChat as useChatContext } from "../contexts/ChatContext";
 import {
 	getContextSegmentStartIndex,
@@ -11,6 +11,159 @@ import type { Attachment, LLMMessage, Message } from "../lib/llm/types";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type ChatPayloadMessage = LLMMessage;
+
+export type ChatIssueCategory =
+	| "none"
+	| "network"
+	| "rate_limit"
+	| "auth_config"
+	| "payload_context"
+	| "upstream_model"
+	| "server"
+	| "cancelled"
+	| "unknown";
+
+export type ChatRequestPhase =
+	| "sending"
+	| "streaming"
+	| "success"
+	| "error"
+	| "aborted";
+
+export interface ChatRequestInsight {
+	id: string;
+	phase: ChatRequestPhase;
+	category: ChatIssueCategory;
+	conversationId: string;
+	provider: string;
+	model: string;
+	startedAt: number;
+	endedAt?: number;
+	durationMs?: number;
+	firstTokenMs?: number;
+	contextMessageCount: number;
+	payloadMessageCount: number;
+	summaryActive: boolean;
+	summaryMessageCount: number;
+	trimmed: boolean;
+	outputTokens?: number;
+	httpStatus?: number;
+	detail?: string;
+	promptTokens?: number;
+	completionTokens?: number;
+	totalTokens?: number;
+}
+
+class ChatSendError extends Error {
+	category: ChatIssueCategory;
+	httpStatus?: number;
+	detail?: string;
+
+	constructor(
+		message: string,
+		options: {
+			category: ChatIssueCategory;
+			httpStatus?: number;
+			detail?: string;
+		},
+	) {
+		super(message);
+		this.name = "ChatSendError";
+		this.category = options.category;
+		this.httpStatus = options.httpStatus;
+		this.detail = options.detail;
+	}
+}
+
+function classifyHttpFailure(status: number): ChatIssueCategory {
+	if (status === 401 || status === 403) return "auth_config";
+	if (status === 429) return "rate_limit";
+	if (status === 400 || status === 413 || status === 422) return "payload_context";
+	if (status >= 500) return "server";
+	return "upstream_model";
+}
+
+function isLikelyNetworkError(error: unknown) {
+	if (!(error instanceof Error)) return false;
+	const text = `${error.name} ${error.message}`.toLowerCase();
+	return (
+		text.includes("failed to fetch") ||
+		text.includes("networkerror") ||
+		text.includes("load failed") ||
+		text.includes("network request failed") ||
+		text.includes("fetch failed")
+	);
+}
+
+function classifyByMessage(message: string): ChatIssueCategory {
+	const text = message.toLowerCase();
+	if (
+		text.includes("rate limit") ||
+		text.includes("429") ||
+		text.includes("调用次数已用尽") ||
+		text.includes("too many requests")
+	) {
+		return "rate_limit";
+	}
+	if (
+		text.includes("api key") ||
+		text.includes("未授权") ||
+		text.includes("无权") ||
+		text.includes("forbidden") ||
+		text.includes("not configured") ||
+		text.includes("密钥未配置")
+	) {
+		return "auth_config";
+	}
+	if (
+		text.includes("payload") ||
+		text.includes("missing messages") ||
+		text.includes("message too large") ||
+		text.includes("invalid payload") ||
+		text.includes("上下文") ||
+		text.includes("token")
+	) {
+		return "payload_context";
+	}
+	if (text.includes("server error") || text.includes("service unavailable")) {
+		return "server";
+	}
+	if (text.includes("api error") || text.includes("upstream")) {
+		return "upstream_model";
+	}
+	return "unknown";
+}
+
+function resolveSendError(error: unknown): {
+	category: ChatIssueCategory;
+	httpStatus?: number;
+	detail: string;
+} {
+	if (error instanceof ChatSendError) {
+		return {
+			category: error.category,
+			httpStatus: error.httpStatus,
+			detail: error.detail || error.message,
+		};
+	}
+	if (isLikelyNetworkError(error)) {
+		return {
+			category: "network",
+			detail:
+				"网络连接失败或中断，请检查本地网络、代理或 Cloudflare 边缘连通性。",
+		};
+	}
+	if (error instanceof Error) {
+		return {
+			category: classifyByMessage(error.message),
+			detail: error.message,
+		};
+	}
+	return {
+		category: "unknown",
+		detail: "未知错误",
+	};
+}
 
 export function useChat() {
 	const {
@@ -27,6 +180,9 @@ export function useChat() {
 	const abortControllerRef = useRef<AbortController | null>(null);
 	const autoCompactInFlightRef = useRef(false);
 	const autoTitleInFlightRef = useRef(false);
+	const [requestInsight, setRequestInsight] = useState<ChatRequestInsight | null>(
+		null,
+	);
 
 	const AUTO_COMPACT_MESSAGE_THRESHOLD = 24;
 	const AUTO_COMPACT_TOKEN_THRESHOLD = 12000;
@@ -197,6 +353,7 @@ export function useChat() {
 
 			setLoading(true);
 			setStreaming(true);
+			const requestStartedAt = Date.now();
 
 			const conversationId = currentConversation.id;
 			const contextStartIndex = getContextSegmentStartIndex(
@@ -295,6 +452,24 @@ export function useChat() {
 					provider === "poloai"
 						? (currentConversation.enableTools ?? true)
 						: currentConversation.enableTools;
+				const summaryActive = !hasContextBoundary && Boolean(currentConversation.summary);
+				const requestInsightId = crypto.randomUUID();
+
+				setRequestInsight({
+					id: requestInsightId,
+					phase: "sending",
+					category: "none",
+					conversationId,
+					provider,
+					model,
+					startedAt: requestStartedAt,
+					contextMessageCount: rawMessages.length,
+					payloadMessageCount: payloadMessages.length,
+					summaryActive,
+					summaryMessageCount,
+					trimmed: messagesTrimmed,
+					outputTokens: payloadOutputTokens,
+				});
 
 				const response = await fetch("/chat/action", {
 					method: "POST",
@@ -333,11 +508,18 @@ export function useChat() {
 					} catch {
 						// Ignore parse errors
 					}
-					throw new Error(message);
+					throw new ChatSendError(message, {
+						category: classifyHttpFailure(response.status),
+						httpStatus: response.status,
+						detail: message,
+					});
 				}
 
 				if (!response.body) {
-					throw new Error("No response body received");
+					throw new ChatSendError("No response body received", {
+						category: "server",
+						detail: "服务端未返回可读取的流响应。",
+					});
 				}
 
 				let fullContent = "";
@@ -354,6 +536,14 @@ export function useChat() {
 						if (!gotFirstToken) {
 							gotFirstToken = true;
 							meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
+							setRequestInsight((prev) => {
+								if (!prev || prev.id !== requestInsightId) return prev;
+								return {
+									...prev,
+									phase: "streaming",
+									firstTokenMs: Date.now() - requestStartedAt,
+								};
+							});
 						}
 						updateMsg({ content: fullContent, meta: { ...meta } });
 					}
@@ -363,6 +553,14 @@ export function useChat() {
 						if (!gotFirstToken) {
 							gotFirstToken = true;
 							meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
+							setRequestInsight((prev) => {
+								if (!prev || prev.id !== requestInsightId) return prev;
+								return {
+									...prev,
+									phase: "streaming",
+									firstTokenMs: Date.now() - requestStartedAt,
+								};
+							});
 						}
 						meta.reasoning = reasoning;
 						updateMsg({ content: fullContent, meta: { ...meta } });
@@ -391,7 +589,10 @@ export function useChat() {
 					}
 
 					if (parsed.type === "error" && parsed.content) {
-						throw new Error(parsed.content);
+						throw new ChatSendError(parsed.content, {
+							category: "upstream_model",
+							detail: parsed.content,
+						});
 					}
 				});
 
@@ -412,6 +613,20 @@ export function useChat() {
 				}
 
 				updateMsg({ content: fullContent, meta: { ...meta } });
+				setRequestInsight((prev) => {
+					if (!prev || prev.id !== requestInsightId) return prev;
+					const endedAt = Date.now();
+					return {
+						...prev,
+						phase: "success",
+						category: "none",
+						endedAt,
+						durationMs: endedAt - requestStartedAt,
+						promptTokens: meta.usage?.promptTokens,
+						completionTokens: meta.usage?.completionTokens,
+						totalTokens: meta.usage?.totalTokens,
+					};
+				});
 				setCurrentConversation((prev) => {
 					if (!prev || prev.id !== conversationId || prev.isPersisted) return prev;
 					return { ...prev, isPersisted: true };
@@ -444,7 +659,33 @@ export function useChat() {
 			} catch (error) {
 				if ((error as Error).name === "AbortError") {
 					console.log("Request aborted");
+					setRequestInsight((prev) => {
+						if (!prev || prev.conversationId !== conversationId) return prev;
+						const endedAt = Date.now();
+						return {
+							...prev,
+							phase: "aborted",
+							category: "cancelled",
+							detail: "已手动停止生成。",
+							endedAt,
+							durationMs: endedAt - requestStartedAt,
+						};
+					});
 				} else {
+					const resolved = resolveSendError(error);
+					setRequestInsight((prev) => {
+						if (!prev || prev.conversationId !== conversationId) return prev;
+						const endedAt = Date.now();
+						return {
+							...prev,
+							phase: "error",
+							category: resolved.category,
+							httpStatus: resolved.httpStatus,
+							detail: resolved.detail,
+							endedAt,
+							durationMs: endedAt - requestStartedAt,
+						};
+					});
 					console.error("Error sending message:", error);
 					throw error;
 				}
@@ -473,11 +714,17 @@ export function useChat() {
 		}
 	}, []);
 
+	const dismissRequestInsight = useCallback(() => {
+		setRequestInsight(null);
+	}, []);
+
 	return {
 		currentConversation,
 		sendMessage,
 		abortGeneration,
 		startConversation,
 		isStreaming,
+		requestInsight,
+		dismissRequestInsight,
 	};
 }
