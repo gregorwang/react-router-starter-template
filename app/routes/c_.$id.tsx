@@ -38,14 +38,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 	if (conversationId === "new") {
 		const projects = await projectsPromise;
 		const targetProjectId = resolveProjectId(projects) || projects[0]?.id || "default";
-		const conversations = await getConversationIndexCached({
-			db: context.db,
-			kv: context.cloudflare.env.SETTINGS_KV,
-			ctx: context.cloudflare.ctx,
-			userId: user.id,
-			projectId: targetProjectId,
-		});
-		const targetConversationId = conversations[0]?.id || crypto.randomUUID();
+		const targetConversationId = crypto.randomUUID();
 		return redirect(`/c/${targetConversationId}?project=${targetProjectId}`);
 	}
 

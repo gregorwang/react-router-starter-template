@@ -26,8 +26,8 @@ export interface ChatActionData {
 }
 
 export const CHAT_ACTION_MAX_BODY_BYTES = 16 * 1024 * 1024;
-export const CHAT_PROMPT_TOKEN_BUDGET = 3500;
-export const CHAT_MIN_CONTEXT_MESSAGES = 4;
+export const CHAT_PROMPT_TOKEN_BUDGET = 12000;
+export const CHAT_MIN_CONTEXT_MESSAGES = 6;
 
 const MAX_MESSAGES = 60;
 const MAX_MESSAGE_CHARS = 20000;

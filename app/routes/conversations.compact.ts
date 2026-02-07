@@ -90,13 +90,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 	const now = Date.now();
 	const baseSummary = conversationWithState.summary?.trim() || "";
+	const persistedSummaryCount = Math.max(
+		0,
+		conversationWithState.summaryMessageCount ?? 0,
+	);
+	const requestedSummaryCount = Math.max(
+		0,
+		typeof payloadSummaryCount === "number" ? payloadSummaryCount : persistedSummaryCount,
+	);
 	const startIndex = baseSummary
-		? Math.max(
-				0,
-				typeof payloadSummaryCount === "number"
-					? payloadSummaryCount
-					: conversationWithState.summaryMessageCount ?? 0,
-			)
+		? Math.max(persistedSummaryCount, requestedSummaryCount)
 		: 0;
 	const boundedStartIndex = Math.min(startIndex, compactMessages.length);
 	const newMessages = compactMessages.slice(boundedStartIndex);
@@ -106,9 +109,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			{
 				ok: true,
 				summary: baseSummary,
-				summaryUpdatedAt: conversation.summaryUpdatedAt ?? now,
+				summaryUpdatedAt: conversationWithState.summaryUpdatedAt ?? now,
 				summaryMessageCount:
-					conversation.summaryMessageCount ?? compactMessages.length,
+					conversationWithState.summaryMessageCount ?? compactMessages.length,
 			},
 			{ headers: { "Cache-Control": "no-store" } },
 		);

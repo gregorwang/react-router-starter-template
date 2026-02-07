@@ -127,6 +127,7 @@ export async function streamLLMFromServer(
 				case "ark":
 					await streamArkServer(requestMessages, model, apiKey!, writeEvent, {
 						enableThinking: options?.enableThinking,
+						outputTokens: options?.outputTokens,
 					});
 					break;
 			}
@@ -833,11 +834,14 @@ async function streamArkServer(
 	model: string,
 	apiKey: string,
 	writeEvent: (event: LLMStreamEvent) => Promise<void>,
-	options?: { enableThinking?: boolean },
+	options?: { enableThinking?: boolean; outputTokens?: number },
 ): Promise<void> {
+	const rawOutputTokens =
+		typeof options?.outputTokens === "number" ? options.outputTokens : 2048;
+	const maxTokens = Math.min(32768, Math.max(256, Math.floor(rawOutputTokens)));
 	const body: Record<string, unknown> = {
 		model,
-		max_tokens: 1000,
+		max_tokens: maxTokens,
 		messages: messages.map((message) => ({
 			role: message.role,
 			content: message.content,

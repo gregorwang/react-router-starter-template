@@ -28,12 +28,11 @@ export function useChat() {
 	const autoCompactInFlightRef = useRef(false);
 	const autoTitleInFlightRef = useRef(false);
 
-	const AUTO_COMPACT_MESSAGE_THRESHOLD = 12;
-	const AUTO_COMPACT_TOKEN_THRESHOLD = 3500;
-	const AUTO_COMPACT_MIN_NEW_MESSAGES = 4;
+	const AUTO_COMPACT_MESSAGE_THRESHOLD = 24;
+	const AUTO_COMPACT_TOKEN_THRESHOLD = 12000;
+	const AUTO_COMPACT_MIN_NEW_MESSAGES = 6;
 	const MAX_PAYLOAD_CHARS = 100000;
 	const MIN_CONTEXT_MESSAGES = 2;
-	const MAX_CONTEXT_MESSAGES = 2;
 	const AUTO_TITLE_MAX_CHARS = 2000;
 
 	const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
@@ -267,12 +266,7 @@ export function useChat() {
 				if (!hasContextBoundary && currentConversation.summary) {
 					const startIndex = Math.min(summaryMessageCount, rawMessages.length);
 					payloadMessages = rawPayloadMessages.slice(startIndex);
-					messagesTrimmed = true;
-
-					if (payloadMessages.length > MAX_CONTEXT_MESSAGES) {
-						payloadMessages = payloadMessages.slice(-MAX_CONTEXT_MESSAGES);
-						messagesTrimmed = true;
-					}
+					messagesTrimmed = startIndex > 0;
 				}
 
 				if (estimateMessageChars(payloadMessages) > MAX_PAYLOAD_CHARS) {

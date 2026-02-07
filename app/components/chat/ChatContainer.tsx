@@ -313,7 +313,7 @@ export function ChatContainer({
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
-							conversationId: currentConversation.id,
+							conversationId: sessionConversationId,
 							projectId: sessionPatch.projectId,
 							patch: sessionPatch,
 						}),
