@@ -44,7 +44,7 @@ export function SidebarItem({
 				<button
 					type="submit"
 					disabled={isDeleting}
-					className="p-2 md:p-1 text-neutral-400 hover:text-rose-500 rounded transition-colors"
+					className="p-2 md:p-1 text-neutral-400 hover:text-rose-500 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 					title="删除对话"
 					onClick={(e) => {
 						if (!confirm("确定要删除这条对话吗？")) {

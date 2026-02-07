@@ -6,7 +6,7 @@ export type LLMProvider =
 	| "poloai"
 	| "ark";
 
-export interface ImageAttachment {
+export interface Attachment {
 	id: string;
 	mimeType:
 		| "image/jpeg"
@@ -25,10 +25,13 @@ export interface ImageAttachment {
 	r2Key?: string;
 }
 
+/** @deprecated Use `Attachment` instead. */
+export type ImageAttachment = Attachment;
+
 export interface LLMMessage {
 	role: "user" | "assistant" | "system";
 	content: string;
-	attachments?: ImageAttachment[];
+	attachments?: Attachment[];
 }
 
 export type ConversationId = string;
@@ -59,6 +62,7 @@ export interface Conversation {
 	forkedAt?: number;
 	createdAt: number;
 	updatedAt: number;
+	isPersisted?: boolean;
 	summary?: string;
 	summaryUpdatedAt?: number;
 	summaryMessageCount?: number;
@@ -112,7 +116,7 @@ export interface MessageMeta {
 	credits?: number;
 	reasoning?: string;
 	thinkingMs?: number;
-	attachments?: ImageAttachment[];
+	attachments?: Attachment[];
 	webSearch?: {
 		provider: "x" | "xai" | "claude";
 		query?: string;
@@ -171,3 +175,4 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 		"@cf/qwen/qwen1.5-7b-chat",
 	],
 };
+

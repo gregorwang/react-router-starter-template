@@ -262,6 +262,12 @@ html.dark body {
 }
 
 @media (max-width: 767px) {
+	html,
+	body {
+		/* Avoid iOS/low-end jank from fixed background during viewport resize */
+		background-attachment: scroll;
+	}
+
 	.chat-layout {
 		width: 100%;
 	}

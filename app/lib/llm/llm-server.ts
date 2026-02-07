@@ -1,5 +1,6 @@
 import type { AppLoadContext } from "react-router";
 import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
+import { consumeSSEJson } from "../utils/sse";
 
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
@@ -954,42 +955,20 @@ async function processSSEStream(
 	response: Response,
 	onParsed: (parsed: any) => Promise<void>,
 ): Promise<void> {
-	const reader = response.body?.getReader();
-	const decoder = new TextDecoder();
-
-	if (!reader) {
+	if (!response.body) {
 		throw new Error("No response body received");
 	}
 
-	let buffer = "";
-
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split("\n");
-		buffer = lines.pop() || "";
-
-		for (const line of lines) {
-			if (line.startsWith("data:")) {
-				const data = line.slice(5).trim();
-				if (data === "[DONE]") break;
-
-				try {
-					const parsed = JSON.parse(data);
-					await onParsed(parsed);
-				} catch (error) {
-					console.error(
-						"[LLM Server] Stream parse error:",
-						error,
-						"Data chunk:",
-						data.slice(0, 50),
-					);
-				}
-			}
-		}
-	}
+	await consumeSSEJson(response.body, onParsed, {
+		onParseError: (payload, error) => {
+			console.error(
+				"[LLM Server] Stream parse error:",
+				error,
+				"Data chunk:",
+				payload.slice(0, 50),
+			);
+		},
+	});
 }
 
 function normalizeUsage(usage: any): Usage | undefined {

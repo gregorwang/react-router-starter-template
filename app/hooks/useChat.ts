@@ -4,8 +4,9 @@ import {
 	getContextSegmentStartIndex,
 	isChatTurnMessage,
 } from "../lib/chat/context-boundary";
+import { consumeSSEJson } from "../lib/utils/sse";
 
-import type { ImageAttachment, LLMMessage, Message } from "../lib/llm/types";
+import type { Attachment, LLMMessage, Message } from "../lib/llm/types";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type ChatPayloadMessage = LLMMessage;
@@ -183,7 +184,7 @@ export function useChat() {
 	}, [startConv]);
 
 	const sendMessage = useCallback(
-		async (content: string, attachments?: ImageAttachment[]) => {
+		async (content: string, attachments?: Attachment[]) => {
 			if (!currentConversation) {
 				startConversation();
 				return;
@@ -323,11 +324,7 @@ export function useChat() {
 					throw new Error(message);
 				}
 
-				// Process the SSE stream
-				const reader = response.body?.getReader();
-				const decoder = new TextDecoder();
-
-				if (!reader) {
+				if (!response.body) {
 					throw new Error("No response body received");
 				}
 
@@ -339,75 +336,52 @@ export function useChat() {
 				};
 				const startedAt = Date.now();
 				let gotFirstToken = false;
-				let buffer = "";
-
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-
-					buffer += decoder.decode(value, { stream: true });
-					const lines = buffer.split("\n");
-					buffer = lines.pop() || "";
-
-					for (const line of lines) {
-						if (line.startsWith("data: ")) {
-							const data = line.slice(6).trim();
-							if (data === "[DONE]") break;
-
-							let parsed: any;
-							try {
-								parsed = JSON.parse(data);
-							} catch {
-								continue;
-							}
-
-							if (parsed.type === "delta" && parsed.content) {
-								fullContent += parsed.content;
-								if (!gotFirstToken) {
-									gotFirstToken = true;
-									meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
-								}
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "reasoning" && parsed.content) {
-								reasoning += parsed.content;
-								if (!gotFirstToken) {
-									gotFirstToken = true;
-									meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
-								}
-								meta.reasoning = reasoning;
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "usage" && parsed.usage) {
-								meta.usage = parsed.usage;
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "credits" && parsed.credits) {
-								meta.credits = parsed.credits;
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "meta" && parsed.meta) {
-								if (parsed.meta.thinkingMs) {
-									meta.thinkingMs = parsed.meta.thinkingMs;
-								}
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "search" && parsed.search) {
-								meta.webSearch = parsed.search;
-								updateMsg({ content: fullContent, meta: { ...meta } });
-							}
-
-							if (parsed.type === "error" && parsed.content) {
-								throw new Error(parsed.content);
-							}
+				await consumeSSEJson<any>(response.body, async (parsed) => {
+					if (parsed.type === "delta" && parsed.content) {
+						fullContent += parsed.content;
+						if (!gotFirstToken) {
+							gotFirstToken = true;
+							meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
 						}
+						updateMsg({ content: fullContent, meta: { ...meta } });
 					}
-				}
+
+					if (parsed.type === "reasoning" && parsed.content) {
+						reasoning += parsed.content;
+						if (!gotFirstToken) {
+							gotFirstToken = true;
+							meta.thinkingMs = meta.thinkingMs ?? Date.now() - startedAt;
+						}
+						meta.reasoning = reasoning;
+						updateMsg({ content: fullContent, meta: { ...meta } });
+					}
+
+					if (parsed.type === "usage" && parsed.usage) {
+						meta.usage = parsed.usage;
+						updateMsg({ content: fullContent, meta: { ...meta } });
+					}
+
+					if (parsed.type === "credits" && parsed.credits) {
+						meta.credits = parsed.credits;
+						updateMsg({ content: fullContent, meta: { ...meta } });
+					}
+
+					if (parsed.type === "meta" && parsed.meta) {
+						if (parsed.meta.thinkingMs) {
+							meta.thinkingMs = parsed.meta.thinkingMs;
+						}
+						updateMsg({ content: fullContent, meta: { ...meta } });
+					}
+
+					if (parsed.type === "search" && parsed.search) {
+						meta.webSearch = parsed.search;
+						updateMsg({ content: fullContent, meta: { ...meta } });
+					}
+
+					if (parsed.type === "error" && parsed.content) {
+						throw new Error(parsed.content);
+					}
+				});
 
 				if (!meta.usage) {
 					const estimateTokens = (text: string) =>
@@ -426,6 +400,10 @@ export function useChat() {
 				}
 
 				updateMsg({ content: fullContent, meta: { ...meta } });
+				setCurrentConversation((prev) => {
+					if (!prev || prev.id !== conversationId || prev.isPersisted) return prev;
+					return { ...prev, isPersisted: true };
+				});
 
 				const assistantMessage = {
 					role: "assistant" as const,
@@ -469,6 +447,7 @@ export function useChat() {
 			startConversation,
 			addMsg,
 			updateMsg,
+			setCurrentConversation,
 			setLoading,
 			setStreaming,
 			maybeAutoCompact,

@@ -2,7 +2,7 @@ import { cn } from "../../lib/utils/cn";
 
 export interface ButtonProps
 	extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	variant?: "default" | "ghost" | "outline" | "danger";
+	variant?: "default" | "ghost" | "outline" | "soft" | "danger";
 	size?: "default" | "sm" | "lg" | "icon";
 	children: React.ReactNode;
 }
@@ -21,6 +21,8 @@ export function Button({
 			"text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
 		outline:
 			"border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 hover:border-brand-400/60 hover:bg-brand-50/70 dark:hover:bg-neutral-800/60",
+		soft:
+			"border border-brand-500/60 text-brand-700 dark:text-brand-200 hover:bg-brand-50/80 dark:hover:bg-brand-900/30",
 		danger:
 			"bg-rose-600 text-white shadow-sm shadow-rose-600/30 hover:bg-rose-500 active:bg-rose-700",
 	};

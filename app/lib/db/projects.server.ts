@@ -87,6 +87,22 @@ export async function renameProject(
 		.run();
 }
 
+export async function updateProjectMeta(
+	db: D1Database,
+	id: string,
+	userId: string,
+	input: { name: string; description: string | null },
+): Promise<void> {
+	await db
+		.prepare(
+			`UPDATE projects
+			SET name = ?, description = ?, updated_at = ?
+			WHERE id = ? AND user_id = ?`,
+		)
+		.bind(input.name, input.description, Date.now(), id, userId)
+		.run();
+}
+
 export async function deleteProject(
 	db: D1Database,
 	id: string,

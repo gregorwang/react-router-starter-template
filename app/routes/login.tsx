@@ -12,6 +12,8 @@ import { ensureDefaultProject } from "../lib/db/projects.server";
 import { createUser, getUserByUsername, updateUserLastLogin } from "../lib/db/users.server";
 import { ensureUserModelLimits } from "../lib/db/user-model-limits.server";
 import { PROVIDER_MODELS } from "../lib/llm/types";
+import { inputBaseClass } from "../components/shared/form-styles";
+import { Button } from "../components/shared/Button";
 
 type ActionData = { ok?: boolean; error?: string; intent?: string };
 
@@ -156,13 +158,13 @@ export default function LoginPage() {
 	const submitting = navigation.state === "submitting";
 
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-brand-50 dark:from-neutral-950 dark:via-neutral-900 dark:to-brand-950 flex items-center justify-center px-4">
+		<div className="min-h-[100dvh] bg-gradient-to-br from-neutral-50 via-white to-brand-50 dark:from-neutral-950 dark:via-neutral-900 dark:to-brand-950 flex items-center justify-center px-4">
 			<div className="w-full max-w-2xl rounded-3xl border border-white/60 dark:border-neutral-800/70 bg-white/70 dark:bg-neutral-900/80 backdrop-blur-xl shadow-2xl p-8 space-y-6">
 				<div>
 					<h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
 						账号登录
 					</h1>
-					<p className="text-sm text-neutral-500 dark:text-neutral-400 mt-2">
+					<p className="text-sm text-neutral-600 dark:text-neutral-300 mt-2">
 						使用用户名 + 密码登录，或使用管理员邀请码注册新账号。
 					</p>
 				</div>
@@ -178,7 +180,7 @@ export default function LoginPage() {
 								name="username"
 								autoComplete="username"
 								placeholder="admin"
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-4 py-4 text-neutral-900 dark:text-neutral-100 shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 transition-all duration-200"
+								className={inputBaseClass}
 							/>
 						</label>
 						<label className="block text-sm text-neutral-600 dark:text-neutral-300">
@@ -188,10 +190,10 @@ export default function LoginPage() {
 								name="password"
 								autoComplete="current-password"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-4 py-4 text-neutral-900 dark:text-neutral-100 shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 transition-all duration-200"
+								className={inputBaseClass}
 							/>
 						</label>
-						<p className="text-xs text-neutral-500 dark:text-neutral-400">
+						<p className="text-xs text-neutral-600 dark:text-neutral-300">
 							如需临时后门登录，可仅填写密码（需配置 AUTH_PASSWORD）。
 						</p>
 
@@ -201,13 +203,14 @@ export default function LoginPage() {
 							</div>
 						)}
 
-						<button
+						<Button
 							type="submit"
+							size="lg"
 							disabled={submitting}
-							className="w-full rounded-xl bg-brand-600 text-white px-4 py-4 text-sm font-semibold shadow-sm shadow-brand-600/30 hover:bg-brand-500 hover:shadow-brand-500/40 transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950 disabled:opacity-60"
+							className="w-full"
 						>
 							{submitting ? "登录中..." : "进入"}
-						</button>
+						</Button>
 					</Form>
 
 					<Form method="post" className="space-y-4">
@@ -220,7 +223,7 @@ export default function LoginPage() {
 								name="inviteCode"
 								autoComplete="one-time-code"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-4 py-4 text-neutral-900 dark:text-neutral-100 shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 transition-all duration-200"
+								className={inputBaseClass}
 							/>
 						</label>
 						<label className="block text-sm text-neutral-600 dark:text-neutral-300">
@@ -230,7 +233,7 @@ export default function LoginPage() {
 								name="username"
 								autoComplete="username"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-4 py-4 text-neutral-900 dark:text-neutral-100 shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 transition-all duration-200"
+								className={inputBaseClass}
 							/>
 						</label>
 						<label className="block text-sm text-neutral-600 dark:text-neutral-300">
@@ -240,7 +243,7 @@ export default function LoginPage() {
 								name="password"
 								autoComplete="new-password"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-4 py-4 text-neutral-900 dark:text-neutral-100 shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 transition-all duration-200"
+								className={inputBaseClass}
 							/>
 						</label>
 
@@ -250,13 +253,15 @@ export default function LoginPage() {
 							</div>
 						)}
 
-						<button
+						<Button
 							type="submit"
+							variant="soft"
+							size="lg"
 							disabled={submitting}
-							className="w-full rounded-xl border border-brand-500/60 text-brand-700 dark:text-brand-200 px-4 py-4 text-sm font-semibold shadow-sm hover:bg-brand-50/80 dark:hover:bg-brand-900/30 transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950 disabled:opacity-60"
+							className="w-full"
 						>
 							{submitting ? "注册中..." : "邀请码注册"}
-						</button>
+						</Button>
 					</Form>
 				</div>
 			</div>

@@ -2,6 +2,8 @@ import type { Route } from "./+types/admin";
 import { Form, useActionData, useFetcher } from "react-router";
 import { format } from "date-fns";
 import { requireAdmin } from "../lib/auth.server";
+import { Button } from "../components/shared/Button";
+import { inputCompactClass, selectBaseClass } from "../components/shared/form-styles";
 import { createInviteCode, listInviteCodes } from "../lib/db/invites.server";
 import { listUsers } from "../lib/db/users.server";
 import {
@@ -128,12 +130,9 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 						</h2>
 						<inviteFetcher.Form method="post">
 							<input type="hidden" name="intent" value="createInvite" />
-							<button
-								type="submit"
-								className="text-sm px-4 py-2 rounded-xl bg-brand-600 text-white shadow-sm hover:bg-brand-500 transition-all duration-200"
-							>
+							<Button type="submit">
 								生成邀请码
-							</button>
+							</Button>
 						</inviteFetcher.Form>
 					</div>
 
@@ -181,7 +180,7 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 							<select
 								name="userId"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 text-neutral-900 dark:text-neutral-100"
+								className={`${selectBaseClass} w-full text-neutral-900 dark:text-neutral-100`}
 							>
 								{users.map((user) => (
 									<option key={user.id} value={user.id}>
@@ -196,7 +195,7 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 							<select
 								name="modelKey"
 								required
-								className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 text-neutral-900 dark:text-neutral-100"
+								className={`${selectBaseClass} w-full text-neutral-900 dark:text-neutral-100`}
 							>
 								{Object.entries(PROVIDER_MODELS).flatMap(([provider, models]) =>
 									models.map((model) => (
@@ -221,7 +220,7 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 									name="weeklyLimit"
 									min="0"
 									placeholder="留空表示无限制"
-									className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 text-neutral-900 dark:text-neutral-100"
+									className={`${inputCompactClass} text-neutral-900 dark:text-neutral-100`}
 								/>
 							</label>
 							<label className="block text-sm text-neutral-600 dark:text-neutral-300">
@@ -231,7 +230,7 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 									name="monthlyLimit"
 									min="0"
 									placeholder="留空表示无限制"
-									className="w-full rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 px-3 py-2 text-neutral-900 dark:text-neutral-100"
+									className={`${inputCompactClass} text-neutral-900 dark:text-neutral-100`}
 								/>
 							</label>
 						</div>
@@ -242,12 +241,9 @@ export default function AdminPage({ loaderData }: { loaderData: LoaderData }) {
 							</div>
 						)}
 
-						<button
-							type="submit"
-							className="w-full rounded-xl bg-neutral-900 text-white px-4 py-3 text-sm font-semibold shadow-sm hover:bg-neutral-800 transition-all duration-200"
-						>
+						<Button type="submit" className="w-full justify-center py-3">
 							保存配置
-						</button>
+						</Button>
 					</Form>
 				</div>
 			</div>

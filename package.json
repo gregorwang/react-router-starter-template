@@ -29,6 +29,7 @@
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "1.15.3",
 		"@cloudflare/workers-types": "^4.20260131.0",
+		"@playwright/test": "^1.58.1",
 		"@react-router/dev": "7.9.6",
 		"@tailwindcss/vite": "4.1.17",
 		"@types/marked": "^5.0.2",
@@ -39,6 +40,7 @@
 		"typescript": "5.9.3",
 		"vite": "^6.0.0",
 		"vite-tsconfig-paths": "5.1.4",
+		"vitest": "^4.0.18",
 		"wrangler": "4.56.0"
 	},
 	"private": true,
@@ -46,11 +48,20 @@
 		"build": "react-router build",
 		"cf-typegen": "wrangler types && react-router typegen",
 		"check": "tsc && react-router build && wrangler deploy --config build/server/wrangler.json --dry-run",
+		"db:migrate:local": "wrangler d1 migrations apply d1database --local",
+		"db:migrate:remote": "wrangler d1 migrations apply d1database --remote",
 		"deploy": "react-router build && wrangler deploy --config build/server/wrangler.json",
 		"dev": "react-router dev",
 		"preview": "npm run build && vite preview",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:e2e": "playwright test",
+		"test:e2e:list": "playwright test --list",
 		"typegen": "react-router typegen",
-		"typecheck": "npm run typegen && tsc -b"
+		"typecheck": "npm run typegen && tsc -b",
+		"typecheck:libcheck": "npm run typegen && tsc -p tsconfig.node.json --noEmit --skipLibCheck false && tsc -p tsconfig.cloudflare.json --noEmit --skipLibCheck false",
+		"typecheck:libcheck:drift": "node scripts/strict-libcheck-check.mjs",
+		"typecheck:libcheck:baseline": "node scripts/strict-libcheck-check.mjs --update-baseline"
 	},
 	"type": "module"
 }

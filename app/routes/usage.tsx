@@ -6,6 +6,7 @@ import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 import type { UsageStats } from "../lib/db/usage.server";
 import type { Project } from "../lib/llm/types";
+import { selectBaseClass } from "../components/shared/form-styles";
 
 type RangeKey = "today" | "7d" | "30d";
 type LoaderData = UsageStats & {
@@ -141,7 +142,7 @@ export default function UsagePage({ loaderData }: { loaderData: LoaderData }) {
 				</div>
 				<div className="flex items-center gap-4">
 					<select
-						className="text-sm border border-neutral-200/70 dark:border-neutral-700/70 rounded-xl px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 hover:border-brand-300/60 dark:hover:border-brand-700/50"
+						className={selectBaseClass}
 						value={activeProjectId}
 						onChange={(e) => updateParams({ project: e.target.value })}
 					>

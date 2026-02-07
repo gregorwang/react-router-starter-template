@@ -1,0 +1,40 @@
+name: Strict Lib Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  strict-libcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Strict Lib Check
+        id: libcheck
+        run: node scripts/strict-libcheck-check.mjs 2>&1 | tee strict-libcheck.log
+
+      - name: Upload Libcheck Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-libcheck-log
+          path: strict-libcheck.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Mark Drift Warning
+        if: steps.libcheck.outcome == 'failure'
+        run: |
+          echo "::warning::Strict lib check detected NEW dependency type drift. See strict-libcheck-log artifact."

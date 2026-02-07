@@ -69,6 +69,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 			enableTools: true,
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
+			isPersisted: false,
 		});
 	}, []);
 

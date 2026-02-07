@@ -1,6 +1,6 @@
 import type { Route } from "./+types/conversations";
 import { Link, useFetcher, useNavigate, useSearchParams } from "react-router";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
 	getProjectUsageTotals,
@@ -10,6 +10,8 @@ import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 import type { ProjectUsageTotals } from "../lib/db/conversations.server";
 import type { Conversation, Project } from "../lib/llm/types";
+import { selectBaseClass } from "../components/shared/form-styles";
+import { Button } from "../components/shared/Button";
 
 type LoaderData = {
 	conversations: Conversation[];
@@ -68,8 +70,11 @@ export default function Conversations({ loaderData }: { loaderData: LoaderData }
 	const handleCreateProject = useCallback(() => {
 		const name = window.prompt("项目名称");
 		if (!name?.trim()) return;
+		const descriptionInput = window.prompt("项目描述（可选）", "");
+		if (descriptionInput === null) return;
+		const description = descriptionInput.trim();
 		projectFetcher.submit(
-			{ name: name.trim() },
+			{ name: name.trim(), description },
 			{ method: "post", action: "/projects/create" },
 		);
 	}, [projectFetcher]);
@@ -97,7 +102,7 @@ export default function Conversations({ loaderData }: { loaderData: LoaderData }
 				</div>
 				<div className="flex items-center gap-4">
 					<select
-						className="text-sm border border-neutral-200/70 dark:border-neutral-700/70 rounded-xl px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 hover:border-brand-300/60 dark:hover:border-brand-700/50"
+						className={selectBaseClass}
 						value={activeProjectId}
 						onChange={(e) => handleProjectChange(e.target.value)}
 					>
@@ -107,13 +112,9 @@ export default function Conversations({ loaderData }: { loaderData: LoaderData }
 							</option>
 						))}
 					</select>
-					<button
-						type="button"
-						onClick={handleCreateProject}
-						className="text-sm px-4 py-2 rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 text-neutral-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-900/60 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
-					>
+					<Button type="button" variant="outline" onClick={handleCreateProject}>
 						新项目
-					</button>
+					</Button>
 				</div>
 			</div>
 			{conversations.length === 0 ? (
@@ -122,15 +123,14 @@ export default function Conversations({ loaderData }: { loaderData: LoaderData }
 						<p className="text-neutral-600 dark:text-neutral-300">
 							暂无对话记录，开始一个新对话吧。
 						</p>
-						<button
+						<Button
 							type="button"
 							onClick={() =>
 								navigate(`/c/${crypto.randomUUID()}?project=${activeProjectId}`)
 							}
-							className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30 hover:bg-brand-500 hover:shadow-brand-500/40 transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 						>
 							开始新对话
-						</button>
+						</Button>
 					</div>
 				</div>
 			) : (
@@ -187,6 +187,47 @@ function ConversationRow({
 }) {
 	const backupFetcher = useFetcher<{ ok?: boolean; key?: string }>();
 	const downloadHref = `/conversations/archive?conversationId=${conversationId}&download=1`;
+	const [archiveKey, setArchiveKey] = useState<string | null>(null);
+	const [isPreparingDownload, setIsPreparingDownload] = useState(false);
+
+	useEffect(() => {
+		if (backupFetcher.data?.ok && backupFetcher.data.key) {
+			setArchiveKey(backupFetcher.data.key);
+		}
+	}, [backupFetcher.data]);
+
+	const handleDownload = async () => {
+		if (isPreparingDownload) return;
+		try {
+			setIsPreparingDownload(true);
+			if (!archiveKey) {
+				const confirmBackup = window.confirm(
+					"下载前需要先备份到 R2。是否立即备份并下载？",
+				);
+				if (!confirmBackup) return;
+				const response = await fetch("/conversations/archive", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ conversationId }),
+				});
+				if (!response.ok) {
+					const text = await response.text();
+					throw new Error(text || "备份失败");
+				}
+				const data = (await response.json()) as { ok?: boolean; key?: string };
+				if (!data.ok || !data.key) {
+					throw new Error("备份失败");
+				}
+				setArchiveKey(data.key);
+			}
+			window.location.assign(downloadHref);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "下载失败";
+			window.alert(message);
+		} finally {
+			setIsPreparingDownload(false);
+		}
+	};
 
 	return (
 		<div className="group p-4 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl rounded-2xl border border-white/60 dark:border-neutral-800/70 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-brand-300/60 dark:hover:border-brand-700/60 transition-all duration-200">
@@ -205,19 +246,19 @@ function ConversationRow({
 			<div className="mt-4 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
 				<backupFetcher.Form method="post" action="/conversations/archive">
 					<input type="hidden" name="conversationId" value={conversationId} />
-					<button
-						type="submit"
-						className="px-3 py-2 rounded-lg border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
-					>
+					<Button type="submit" variant="outline" size="sm">
 						备份到 R2
-					</button>
+					</Button>
 				</backupFetcher.Form>
-				<a
-					href={downloadHref}
-					className="px-3 py-2 rounded-lg border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+				<Button
+					type="button"
+					onClick={handleDownload}
+					disabled={isPreparingDownload}
+					variant="outline"
+					size="sm"
 				>
-					下载
-				</a>
+					{isPreparingDownload ? "准备中..." : "下载"}
+				</Button>
 				{backupFetcher.data?.ok && backupFetcher.data.key && (
 					<span className="text-emerald-600 dark:text-emerald-400">
 						已保存 {backupFetcher.data.key}

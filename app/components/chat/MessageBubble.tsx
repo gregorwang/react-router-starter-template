@@ -96,7 +96,7 @@ export function MessageBubble({
 						"flex items-center justify-between text-xs mb-1",
 						isUser
 							? "text-white/70"
-							: "text-neutral-500 dark:text-neutral-400",
+							: "text-neutral-600 dark:text-neutral-300",
 					)}
 				>
 					<span>{isUser ? "你" : (modelName || "助手")}</span>
@@ -104,13 +104,13 @@ export function MessageBubble({
 						<button
 							type="button"
 							onClick={handleCopy}
-							className={cn(
-								"text-xs transition-colors",
-								isUser
-									? "text-white/70 hover:text-white"
-									: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
-							)}
-						>
+								className={cn(
+									"text-xs transition-colors",
+									isUser
+										? "text-white/70 hover:text-white"
+										: "text-neutral-500 dark:text-neutral-300 hover:text-brand-600 dark:hover:text-brand-200",
+								)}
+							>
 							{copied ? "已复制" : "复制"}
 						</button>
 						{onForkFromMessage && (
@@ -120,7 +120,7 @@ export function MessageBubble({
 										"list-none cursor-pointer select-none text-xs transition-colors",
 										isUser
 											? "text-white/70 hover:text-white"
-											: "text-neutral-400 hover:text-brand-600 dark:hover:text-brand-200",
+											: "text-neutral-500 dark:text-neutral-300 hover:text-brand-600 dark:hover:text-brand-200",
 									)}
 								>
 									⋯
@@ -140,7 +140,7 @@ export function MessageBubble({
 					</div>
 				</div>
 				{showThinkingStatus && (
-					<div className="mb-2 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+					<div className="mb-2 flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-300">
 						<span
 							className={cn(
 								"inline-flex items-center gap-1.5",
@@ -209,7 +209,7 @@ export function MessageBubble({
 						<p className="whitespace-pre-wrap break-words">{message.content}</p>
 					)
 				) : showStreamingPlaceholder ? (
-					<div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+					<div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
 						<span className="flex gap-1">
 							<span className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
 							<span className="w-2 h-2 bg-secondary-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -221,7 +221,7 @@ export function MessageBubble({
 					<MarkdownRenderer content={normalizedContent} />
 				)}
 				{(formattedThinking || usage || message.meta?.credits) && (
-					<div className="mt-2 flex flex-wrap gap-4 text-xs text-neutral-500 dark:text-neutral-400">
+					<div className="mt-2 flex flex-wrap gap-4 text-xs text-neutral-600 dark:text-neutral-300">
 						{formattedThinking && <span>思考用时：{formattedThinking}</span>}
 						{usage && (
 							<span>
@@ -236,7 +236,7 @@ export function MessageBubble({
 					</div>
 				)}
 				{message.meta?.webSearch?.results?.length ? (
-					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+					<div className="mt-4 text-xs text-neutral-600 dark:text-neutral-300">
 						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
 							{searchProviderLabel}结果
 						</div>
@@ -264,7 +264,7 @@ export function MessageBubble({
 					</div>
 				) : null}
 				{citationUrls.length > 0 ? (
-					<div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+					<div className="mt-4 text-xs text-neutral-600 dark:text-neutral-300">
 						<div className="font-medium text-neutral-600 dark:text-neutral-300 mb-1">
 							{searchProviderLabel}引用
 						</div>

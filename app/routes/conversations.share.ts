@@ -1,6 +1,8 @@
 import type { Route } from "./+types/conversations.share";
 import { requireAuth } from "../lib/auth.server";
-import { createOrGetConversationShareToken } from "../lib/db/share-links.server";
+import {
+	createConversationShareLink,
+} from "../lib/services/conversation-share.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -22,15 +24,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 		return new Response("Missing conversationId", { status: 400 });
 	}
 
-	const token = await createOrGetConversationShareToken(context.db, user.id, conversationId);
-	if (!token) {
-		return new Response("Conversation not found", { status: 404 });
-	}
-
 	const url = new URL(request.url);
-	const shareUrl = `${url.origin}/s/${token}`;
-	return Response.json(
-		{ ok: true, url: shareUrl },
-		{ headers: { "Cache-Control": "no-store" } },
-	);
+	return createConversationShareLink({
+		db: context.db,
+		userId: user.id,
+		origin: url.origin,
+		conversationId,
+	});
 }

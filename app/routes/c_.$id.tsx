@@ -82,6 +82,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			messages: [],
+			isPersisted: false,
 		};
 		isPlaceholder = true;
 	}
@@ -198,11 +199,22 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 				];
 			}
 			const existing = prev[index];
-			if (existing.title === currentConversation.title) return prev;
+			const existingPersisted = Boolean(existing.isPersisted);
+			const nextPersisted =
+				currentConversation.isPersisted === undefined
+					? existingPersisted
+					: Boolean(currentConversation.isPersisted);
+			if (
+				existing.title === currentConversation.title &&
+				existingPersisted === nextPersisted
+			) {
+				return prev;
+			}
 			const next = [...prev];
 			next[index] = {
 				...existing,
 				title: currentConversation.title,
+				isPersisted: nextPersisted,
 			};
 			return next;
 		});
@@ -225,10 +237,13 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	const handleCreateProject = useCallback(async () => {
 		const name = window.prompt("项目名称");
 		if (!name?.trim()) return;
+		const descriptionInput = window.prompt("项目描述（可选）", "");
+		if (descriptionInput === null) return;
+		const description = descriptionInput.trim();
 		const response = await fetch("/projects/create", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ name: name.trim() }),
+			body: JSON.stringify({ name: name.trim(), description }),
 		});
 		if (!response.ok) return;
 		const data = (await response.json()) as { project?: { id: string } };
@@ -238,7 +253,7 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 	}, [handleProjectChange]);
 
 	return (
-		<div className="chat-layout flex h-screen min-h-0 overflow-hidden relative">
+		<div className="chat-layout flex h-[100dvh] min-h-0 overflow-hidden relative">
 			{sidebarOpen && (
 				<button
 					type="button"

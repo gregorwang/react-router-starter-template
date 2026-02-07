@@ -3,6 +3,11 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { format } from "date-fns";
 import { Button } from "../shared/Button";
 import { cn } from "../../lib/utils/cn";
+import {
+	inputCompactClass,
+	outlinePanelButtonClass,
+	selectCompactClass,
+} from "../shared/form-styles";
 import type { Conversation, Project, User } from "../../lib/llm/types";
 
 type ChatFilter = "all" | "recent" | "pinned" | "archived";
@@ -204,7 +209,7 @@ export function Sidebar({
 
 	const updateConversation = async (
 		conversation: Conversation,
-		action: "rename" | "pin" | "unpin",
+		action: "rename" | "archive" | "unarchive" | "pin" | "unpin",
 		title?: string,
 	) => {
 		const response = await fetch("/conversations/update", {
@@ -297,15 +302,28 @@ export function Sidebar({
 			throw new Error("分享链接生成失败");
 		}
 		await navigator.clipboard.writeText(data.url);
+		window.alert("分享链接已复制");
 	};
 
 	const handleProjectRename = async (project: Project) => {
-		const nextName = window.prompt("新项目名称", project.name);
-		if (!nextName?.trim()) return;
+		const nextNameInput = window.prompt("新项目名称", project.name);
+		if (nextNameInput === null) return;
+		const nextName = nextNameInput.trim();
+		if (!nextName) return;
+		const nextDescriptionInput = window.prompt(
+			"项目描述（可选）",
+			project.description || "",
+		);
+		if (nextDescriptionInput === null) return;
+		const nextDescription = nextDescriptionInput.trim();
 		const response = await fetch("/projects/update", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ projectId: project.id, name: nextName.trim() }),
+			body: JSON.stringify({
+				projectId: project.id,
+				name: nextName,
+				description: nextDescription,
+			}),
 		});
 		if (!response.ok) {
 			const text = await response.text();
@@ -314,7 +332,12 @@ export function Sidebar({
 		applyProjects((prev) =>
 			prev.map((item) =>
 				item.id === project.id
-					? { ...item, name: nextName.trim(), updatedAt: Date.now() }
+					? {
+							...item,
+							name: nextName,
+							description: nextDescription || undefined,
+							updatedAt: Date.now(),
+						}
 					: item,
 			),
 		);
@@ -367,12 +390,18 @@ export function Sidebar({
 		conversation: Conversation,
 		action:
 			| "rename"
+			| "archive"
+			| "unarchive"
 			| "pin"
 			| "unpin"
 			| "delete"
 			| "copy",
 	) => {
 		try {
+			if (!conversation.isPersisted) {
+				window.alert("请先发送首条消息并落库，再执行该操作。");
+				return;
+			}
 			if (action === "rename") {
 				const nextTitle = window.prompt("对话标题", conversation.title);
 				if (!nextTitle?.trim()) return;
@@ -385,6 +414,14 @@ export function Sidebar({
 			}
 			if (action === "unpin") {
 				await updateConversation(conversation, "unpin");
+				return;
+			}
+			if (action === "archive") {
+				await updateConversation(conversation, "archive");
+				return;
+			}
+			if (action === "unarchive") {
+				await updateConversation(conversation, "unarchive");
 				return;
 			}
 			if (action === "delete") {
@@ -410,7 +447,7 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"chat-sidebar-panel w-72 h-screen bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
+				"chat-sidebar-panel w-72 h-[100dvh] bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
 				isOpen && "is-open",
 				isCollapsed
 					? "md:w-0 md:opacity-0 md:pointer-events-none md:overflow-hidden md:border-r-0 md:shadow-none"
@@ -438,13 +475,13 @@ export function Sidebar({
 					<button
 						type="button"
 						onClick={() => setSearchOpen((prev) => !prev)}
-						className="text-xs px-3 py-2 rounded-lg border border-neutral-200/70 dark:border-neutral-700/70 text-neutral-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-900/60 hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200"
+						className={outlinePanelButtonClass}
 					>
 						搜索对话
 					</button>
 					<Link
 						to="/conversations"
-						className="text-xs px-3 py-2 rounded-lg border border-neutral-200/70 dark:border-neutral-700/70 text-center text-neutral-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-900/60 hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200"
+						className={cn(outlinePanelButtonClass, "text-center")}
 					>
 						库/资料
 					</Link>
@@ -456,13 +493,19 @@ export function Sidebar({
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							placeholder="搜索标题或内容..."
-							className="w-full text-sm border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/90 dark:bg-neutral-900/80 text-neutral-700 dark:text-neutral-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50"
+							className={cn(
+								inputCompactClass,
+								"text-sm bg-white/90 dark:bg-neutral-900/80 text-neutral-700 dark:text-neutral-200",
+							)}
 						/>
 						<div className="flex items-center gap-2">
 							<select
 								value={searchScope}
 								onChange={(e) => setSearchScope(e.target.value as SearchScope)}
-								className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-2 py-1.5 bg-white/90 dark:bg-neutral-900/80 text-neutral-700 dark:text-neutral-200"
+								className={cn(
+									selectCompactClass,
+									"bg-white/90 dark:bg-neutral-900/80",
+								)}
 							>
 								<option value="project">当前项目</option>
 								<option value="all">全部项目</option>
@@ -555,7 +598,10 @@ export function Sidebar({
 										<div className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 truncate">
 											{project.name}
 										</div>
-										<div className="text-[11px] text-neutral-500 dark:text-neutral-400">
+										<div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+											{project.description?.trim() || "未设置项目描述"}
+										</div>
+										<div className="text-[10px] text-neutral-400 dark:text-neutral-500">
 											{projectCounts[project.id] || 0} 条对话
 										</div>
 									</button>
@@ -628,7 +674,7 @@ export function Sidebar({
 					<select
 						value={chatFilter}
 						onChange={(e) => setChatFilter(e.target.value as ChatFilter)}
-						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-2 py-1 bg-white/80 dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-200"
+						className={cn(selectCompactClass, "bg-white/80 dark:bg-neutral-900/70")}
 					>
 						<option value="all">全部</option>
 						<option value="recent">最近</option>
@@ -668,6 +714,7 @@ export function Sidebar({
 										conversation={conversation}
 										isActive={isActive}
 										isMenuOpen={isMenuOpen}
+										disableActions={!conversation.isPersisted}
 										onOpenMenu={(event) => {
 											event.stopPropagation();
 											setActiveConversationMenuId((prev) =>
@@ -694,6 +741,7 @@ export function Sidebar({
 										conversation={conversation}
 										isActive={isActive}
 										isMenuOpen={isMenuOpen}
+										disableActions={!conversation.isPersisted}
 										onOpenMenu={(event) => {
 											event.stopPropagation();
 											setActiveConversationMenuId((prev) =>
@@ -789,16 +837,20 @@ function ConversationListRow({
 	conversation,
 	isActive,
 	isMenuOpen,
+	disableActions,
 	onOpenMenu,
 	onAction,
 }: {
 	conversation: Conversation;
 	isActive: boolean;
 	isMenuOpen: boolean;
+	disableActions: boolean;
 	onOpenMenu: (event: MouseEvent<HTMLButtonElement>) => void;
 	onAction: (
 		action:
 			| "rename"
+			| "archive"
+			| "unarchive"
 			| "pin"
 			| "unpin"
 			| "delete"
@@ -831,8 +883,9 @@ function ConversationListRow({
 			<button
 				type="button"
 				onClick={onOpenMenu}
+				disabled={disableActions}
 				className="absolute right-1 top-2 p-1.5 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
-				title="对话操作"
+				title={disableActions ? "发送首条消息后可操作" : "对话操作"}
 			>
 				⋯
 			</button>
@@ -841,34 +894,49 @@ function ConversationListRow({
 					className="absolute right-2 top-10 z-40 min-w-40 rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 bg-white/95 dark:bg-neutral-900/95 shadow-lg p-1.5"
 					onClick={(e) => e.stopPropagation()}
 				>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
-						onClick={() => onAction("rename")}
-					>
-						重命名
-					</button>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
-						onClick={() => onAction(pinned ? "unpin" : "pin")}
-					>
-						{pinned ? "取消置顶" : "置顶"}
-					</button>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
-						onClick={() => onAction("copy")}
-					>
-						复制分享链接
-					</button>
-					<button
-						type="button"
-						className="w-full text-left text-xs px-2.5 py-2 rounded-lg text-rose-600 dark:text-rose-300 hover:bg-rose-50/70 dark:hover:bg-rose-900/20"
-						onClick={() => onAction("delete")}
-					>
-						删除
-					</button>
+					{disableActions ? (
+						<div className="px-2.5 py-2 text-xs text-neutral-500 dark:text-neutral-400">
+							发送首条消息后可进行管理操作
+						</div>
+					) : (
+						<>
+							<button
+								type="button"
+								className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
+								onClick={() => onAction("rename")}
+							>
+								重命名
+							</button>
+							<button
+								type="button"
+								className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
+								onClick={() => onAction(pinned ? "unpin" : "pin")}
+							>
+								{pinned ? "取消置顶" : "置顶"}
+							</button>
+							<button
+								type="button"
+								className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
+								onClick={() => onAction(archived ? "unarchive" : "archive")}
+							>
+								{archived ? "取消归档" : "归档"}
+							</button>
+							<button
+								type="button"
+								className="w-full text-left text-xs px-2.5 py-2 rounded-lg hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60"
+								onClick={() => onAction("copy")}
+							>
+								复制分享链接
+							</button>
+							<button
+								type="button"
+								className="w-full text-left text-xs px-2.5 py-2 rounded-lg text-rose-600 dark:text-rose-300 hover:bg-rose-50/70 dark:hover:bg-rose-900/20"
+								onClick={() => onAction("delete")}
+							>
+								删除
+							</button>
+						</>
+					)}
 				</div>
 			)}
 		</div>

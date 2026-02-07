@@ -3,7 +3,8 @@ import { useChat } from "../../hooks/useChat";
 import { useChat as useChatContext } from "../../contexts/ChatContext";
 import { SendButton } from "./SendButton";
 import { cn } from "../../lib/utils/cn";
-import type { ImageAttachment } from "../../lib/llm/types";
+import type { Attachment } from "../../lib/llm/types";
+import { outlineActionButtonClass } from "../shared/form-styles";
 
 const MAX_INPUT_CHARS = 20000;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -34,7 +35,7 @@ export function InputArea({
 	providerUnavailableMessage?: string;
 }) {
 	const [input, setInput] = useState("");
-	const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const [attachmentError, setAttachmentError] = useState<string | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +121,7 @@ export function InputArea({
 				setAttachmentError(`最多支持 ${MAX_IMAGES} 个附件，已忽略多余文件。`);
 			}
 
-			const next: ImageAttachment[] = [];
+			const next: Attachment[] = [];
 			const currentTotalBytes = attachments.reduce(
 				(total, item) => total + (item.size || 0),
 				0,
@@ -158,7 +159,7 @@ export function InputArea({
 
 				next.push({
 					id: crypto.randomUUID(),
-					mimeType: file.type as ImageAttachment["mimeType"],
+					mimeType: file.type as Attachment["mimeType"],
 					data: base64,
 					name: file.name,
 					size: file.size,
@@ -226,7 +227,7 @@ export function InputArea({
 									<button
 										type="button"
 										onClick={() => handleRemoveAttachment(attachment.id)}
-										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75"
+										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
 										aria-label="移除附件"
 									>
 										×
@@ -244,14 +245,14 @@ export function InputArea({
 										<p className="text-xs text-neutral-700 dark:text-neutral-200 truncate">
 											{attachment.name || "附件"}
 										</p>
-										<p className="text-[11px] text-neutral-500 truncate">
+										<p className="text-[11px] text-neutral-600 dark:text-neutral-300 truncate">
 											{attachment.mimeType}
 										</p>
 									</div>
 									<button
 										type="button"
 										onClick={() => handleRemoveAttachment(attachment.id)}
-										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75"
+										className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
 										aria-label="移除附件"
 									>
 										×
@@ -307,7 +308,7 @@ export function InputArea({
 							<button
 								type="button"
 								onClick={abortGeneration}
-								className="text-xs px-3 py-2 rounded-lg border border-neutral-200/70 dark:border-neutral-700/70 text-neutral-600 dark:text-neutral-300 bg-white/70 dark:bg-neutral-900/60 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+								className={outlineActionButtonClass}
 							>
 								停止
 							</button>
@@ -345,7 +346,7 @@ export function InputArea({
 				</p>
 			)}
 			{canUploadAttachment && (
-				<p className="mt-2 text-xs text-neutral-400">
+				<p className="mt-2 text-xs text-neutral-500 dark:text-neutral-300">
 					最多 {MAX_IMAGES} 个附件，支持上传（图片支持粘贴），单个不超过 5MB，总计不超过 10MB（{attachmentFormatHint}）。
 				</p>
 			)}

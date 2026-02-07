@@ -17,7 +17,9 @@ const requestHandler = createRequestHandler(
 );
 
 let dbInitPromise: Promise<void> | null = null;
+let dbInitLastFailureAt = 0;
 const MANIFEST_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const DB_INIT_RETRY_COOLDOWN_MS = 5_000;
 
 function setD1LogFlag(env: Env) {
 	const raw = String(env.D1_LOG || "")
@@ -28,16 +30,53 @@ function setD1LogFlag(env: Env) {
 }
 
 async function ensureDatabase(env: Env) {
-	if (!dbInitPromise) {
-		dbInitPromise = initDatabase(env.DB, env);
+	const now = Date.now();
+	if (
+		dbInitLastFailureAt > 0 &&
+		now - dbInitLastFailureAt < DB_INIT_RETRY_COOLDOWN_MS
+	) {
+		throw new Error("Database initialization temporarily unavailable");
 	}
-	return dbInitPromise;
+
+	if (!dbInitPromise) {
+		const allowRuntimeMigrations = readBooleanEnv(
+			env,
+			"DB_RUNTIME_MIGRATIONS",
+			import.meta.env.DEV,
+		);
+		const allowAdminBootstrap = readBooleanEnv(
+			env,
+			"DB_RUNTIME_ADMIN_BOOTSTRAP",
+			import.meta.env.DEV,
+		);
+		dbInitPromise = initDatabase(env.DB, env, {
+			allowRuntimeMigrations,
+			allowAdminBootstrap,
+		});
+	}
+
+	try {
+		await dbInitPromise;
+		dbInitLastFailureAt = 0;
+	} catch (error) {
+		dbInitPromise = null;
+		dbInitLastFailureAt = Date.now();
+		throw error;
+	}
 }
 
 export default {
 	async fetch(request, env, ctx) {
 		setD1LogFlag(env);
-		await ensureDatabase(env);
+		try {
+			await ensureDatabase(env);
+		} catch (error) {
+			console.error("[db-init] failed", error);
+			return new Response("Service unavailable", {
+				status: 503,
+				headers: { "Cache-Control": "no-store" },
+			});
+		}
 		const url = new URL(request.url);
 		if (request.method === "GET" && url.pathname === "/__manifest") {
 			const cacheStorage = caches as CacheStorage & { default?: Cache };
@@ -70,6 +109,19 @@ export default {
 	},
 } satisfies ExportedHandler<Env>;
 
+function readBooleanEnv(env: Env, key: string, defaultValue = false): boolean {
+	const raw = (env as unknown as Record<string, unknown>)[key];
+	if (typeof raw !== "string") return defaultValue;
+	const normalized = raw.trim().toLowerCase();
+	if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+		return true;
+	}
+	if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+		return false;
+	}
+	return defaultValue;
+}
+
 export class ChatRateLimiter {
 	private state: DurableObjectState;
 
@@ -82,15 +134,31 @@ export class ChatRateLimiter {
 			return new Response("Method not allowed", { status: 405 });
 		}
 
-		const payload = (await request.json()) as {
-			limit?: number;
-			windowMs?: number;
-			now?: number;
-		};
+		let payload: { limit?: number; windowMs?: number; now?: number } = {};
+		try {
+			const parsed = (await request.json()) as unknown;
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+				payload = parsed as { limit?: number; windowMs?: number; now?: number };
+			}
+		} catch {
+			return new Response(
+				JSON.stringify({ error: "Invalid JSON payload" }),
+				{
+					status: 400,
+					headers: { "Content-Type": "application/json" },
+				},
+			);
+		}
 
-		const limit = Math.max(1, payload.limit ?? 20);
-		const windowMs = Math.max(60_000, payload.windowMs ?? 3_600_000);
-		const now = payload.now ?? Date.now();
+		const limitInput = payload.limit;
+		const windowMsInput = payload.windowMs;
+		const nowInput = payload.now;
+		const limit = Math.max(1, Number.isFinite(limitInput) ? Number(limitInput) : 20);
+		const windowMs = Math.max(
+			60_000,
+			Number.isFinite(windowMsInput) ? Number(windowMsInput) : 3_600_000,
+		);
+		const now = Number.isFinite(nowInput) ? Number(nowInput) : Date.now();
 		const bucket = Math.floor(now / windowMs);
 
 		let count = 0;

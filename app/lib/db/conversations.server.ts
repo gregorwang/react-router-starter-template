@@ -1,6 +1,7 @@
 import type { Conversation, Message } from "../llm/types";
 import { hashPassword } from "../auth/password.server";
 import { ensureAdminUser } from "./users.server";
+import { safeJsonParse } from "./safe-json.server";
 
 type D1Meta = {
 	duration?: number;
@@ -73,6 +74,28 @@ export interface DBMessage {
 	timestamp: number;
 }
 
+function parseStoredMessages(
+	rawMessages: string | null | undefined,
+	context: string,
+): Message[] {
+	const parsed = safeJsonParse<any[]>(rawMessages, [], `${context}:messages`);
+	return parsed.map((message) => {
+		const parsedMeta =
+			typeof message?.meta === "string"
+				? safeJsonParse<Message["meta"] | null>(
+						message.meta,
+						null,
+						`${context}:message-meta`,
+					) ?? undefined
+				: (message?.meta as Message["meta"] | undefined);
+
+		return {
+			...message,
+			meta: parsedMeta,
+		} as Message;
+	});
+}
+
 // Server-side database operations
 export async function getConversations(
 	db: D1Database,
@@ -114,6 +137,7 @@ export async function getConversations(
 		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		isPersisted: true,
 		summary: row.summary || undefined,
 		summaryUpdatedAt: row.summary_updated_at ?? undefined,
 		summaryMessageCount: row.summary_message_count ?? undefined,
@@ -156,6 +180,7 @@ export async function getConversationIndex(
 		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		isPersisted: true,
 		summary: row.summary || undefined,
 		summaryUpdatedAt: row.summary_updated_at ?? undefined,
 		summaryMessageCount: row.summary_message_count ?? undefined,
@@ -203,16 +228,11 @@ export async function getConversation(
 		forkedAt: row.forked_at ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
+		isPersisted: true,
 		summary: row.summary || undefined,
 		summaryUpdatedAt: row.summary_updated_at ?? undefined,
 		summaryMessageCount: row.summary_message_count ?? undefined,
-		messages: JSON.parse(row.messages || "[]").map((message: any) => ({
-			...message,
-			meta:
-				typeof message.meta === "string"
-					? JSON.parse(message.meta || "null") ?? undefined
-					: message.meta ?? undefined,
-		})),
+		messages: parseStoredMessages(row.messages, `conversation:${row.id}`),
 	};
 }
 
@@ -674,9 +694,64 @@ export async function deleteConversation(
 		.run();
 }
 
+export interface InitDatabaseOptions {
+	allowRuntimeMigrations?: boolean;
+	allowAdminBootstrap?: boolean;
+}
+
 // Database initialization
-export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
-	// Create conversations table
+export async function initDatabase(
+	db: D1Database,
+	env?: Env,
+	options?: InitDatabaseOptions,
+): Promise<void> {
+	const allowRuntimeMigrations = options?.allowRuntimeMigrations === true;
+	const allowAdminBootstrap = options?.allowAdminBootstrap === true;
+
+	if (allowRuntimeMigrations) {
+		await ensureBaseTables(db);
+		await runRuntimeLegacyMigrations(db);
+		await ensureIndexes(db);
+		await ensureLegacyDefaultProject(db);
+	}
+
+	await assertRequiredSchema(db);
+
+	if (allowAdminBootstrap) {
+		await runAdminBootstrap(db, env);
+	}
+}
+
+const REQUIRED_SCHEMA_COLUMNS: Record<string, string[]> = {
+	conversations: [
+		"user_id",
+		"project_id",
+		"is_archived",
+		"is_pinned",
+		"pinned_at",
+		"forked_from_conversation_id",
+		"forked_from_message_id",
+		"forked_at",
+		"summary",
+		"summary_updated_at",
+		"summary_message_count",
+	],
+	messages: ["meta"],
+	sessions: ["user_id", "expires_at"],
+	projects: ["user_id", "is_default"],
+	conversation_share_links: [
+		"token",
+		"conversation_id",
+		"user_id",
+		"revoked_at",
+		"expires_at",
+	],
+	users: ["id", "username", "password_hash", "role"],
+	invite_codes: ["code", "created_by", "created_at", "expires_at"],
+	user_model_limits: ["user_id", "provider", "model", "enabled", "updated_at"],
+};
+
+async function ensureBaseTables(db: D1Database) {
 	await db
 		.prepare(
 			`CREATE TABLE IF NOT EXISTS conversations (
@@ -701,7 +776,6 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 		)
 		.run();
 
-	// Create messages table
 	await db
 		.prepare(
 			`CREATE TABLE IF NOT EXISTS messages (
@@ -750,6 +824,7 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 				created_at INTEGER NOT NULL,
 				updated_at INTEGER NOT NULL,
 				revoked_at INTEGER,
+				expires_at INTEGER,
 				UNIQUE(user_id, conversation_id),
 				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 			)`,
@@ -797,8 +872,9 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 			)`,
 		)
 		.run();
+}
 
-	// Normalize default project name if legacy data exists.
+async function runRuntimeLegacyMigrations(db: D1Database) {
 	await db
 		.prepare(
 			"UPDATE projects SET name = ?, description = ?, updated_at = ? WHERE id = 'default' AND name IN ('Default', '模型选择')",
@@ -806,243 +882,146 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 		.bind("默认项目", "默认工作区", Date.now())
 		.run();
 
-	// Best-effort migrations for existing schemas
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'").run();
-	} catch {
-		// Column already exists
-	}
+	const legacyStatements = [
+		"ALTER TABLE conversations ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'",
+		"ALTER TABLE conversations ADD COLUMN user_id TEXT",
+		"ALTER TABLE messages ADD COLUMN meta TEXT",
+		"ALTER TABLE conversations ADD COLUMN summary TEXT",
+		"ALTER TABLE conversations ADD COLUMN summary_updated_at INTEGER",
+		"ALTER TABLE conversations ADD COLUMN summary_message_count INTEGER",
+		"ALTER TABLE conversations ADD COLUMN forked_from_conversation_id TEXT",
+		"ALTER TABLE conversations ADD COLUMN forked_from_message_id TEXT",
+		"ALTER TABLE conversations ADD COLUMN forked_at INTEGER",
+		"ALTER TABLE conversations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE conversations ADD COLUMN pinned_at INTEGER",
+		"ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL",
+		"ALTER TABLE sessions ADD COLUMN user_id TEXT",
+		"ALTER TABLE projects ADD COLUMN user_id TEXT",
+		"ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE conversation_share_links ADD COLUMN revoked_at INTEGER",
+		"ALTER TABLE conversation_share_links ADD COLUMN expires_at INTEGER",
+	];
 
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN user_id TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE messages ADD COLUMN meta TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN summary TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN summary_updated_at INTEGER").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN summary_message_count INTEGER").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_from_conversation_id TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_from_message_id TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN forked_at INTEGER").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE conversations ADD COLUMN pinned_at INTEGER").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL").run();
-	} catch {
-		// Column already exists or table is new
-	}
-
-	try {
-		await db.prepare("ALTER TABLE sessions ADD COLUMN user_id TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE projects ADD COLUMN user_id TEXT").run();
-	} catch {
-		// Column already exists
-	}
-
-	try {
-		await db.prepare("ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0").run();
-	} catch {
-		// Column already exists
-	}
-
-	const adminUsername = env?.ADMIN_USERNAME?.trim() || "admin";
-	const adminPassword = (env?.ADMIN_PASSWORD || env?.AUTH_PASSWORD || "").trim();
-	if (adminPassword) {
+	for (const sql of legacyStatements) {
 		try {
-			const adminHash = await hashPassword(adminPassword);
-			const adminUser = await ensureAdminUser(db, {
-				username: adminUsername,
-				passwordHash: adminHash,
-			});
-
-			await db
-				.prepare(
-					"UPDATE conversations SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
-				)
-				.bind(adminUser.id)
-				.run();
-
-			await db
-				.prepare(
-					"UPDATE projects SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
-				)
-				.bind(adminUser.id)
-				.run();
-
-			await db
-				.prepare(
-					"UPDATE projects SET is_default = 1 WHERE id = 'default' AND user_id = ?",
-				)
-				.bind(adminUser.id)
-				.run();
-
-			const { results: defaultResults } = await db
-				.prepare(
-					"SELECT id FROM projects WHERE user_id = ? AND is_default = 1 LIMIT 1",
-				)
-				.bind(adminUser.id)
-				.all();
-
-			if (!defaultResults || defaultResults.length === 0) {
-				const now = Date.now();
-				const defaultId = `default:${adminUser.id}`;
-				await db
-					.prepare(
-						`INSERT OR IGNORE INTO projects (id, user_id, name, description, is_default, created_at, updated_at)
-						VALUES (?, ?, ?, ?, 1, ?, ?)`,
-					)
-					.bind(defaultId, adminUser.id, "默认项目", "默认工作区", now, now)
-					.run();
-			}
-
-			await db.prepare("DELETE FROM sessions WHERE user_id IS NULL").run();
-		} catch (error) {
-			console.error("[initDatabase] Admin bootstrap failed:", error);
+			await db.prepare(sql).run();
+		} catch {
+			// Column already exists on upgraded schemas.
 		}
 	}
+}
 
-	// Indexes must be created after migrations to avoid missing-column errors.
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id)",
-		)
-		.run();
+async function assertRequiredSchema(db: D1Database) {
+	for (const [table, requiredColumns] of Object.entries(REQUIRED_SCHEMA_COLUMNS)) {
+		const existingColumns = await listTableColumns(db, table);
+		const missing = requiredColumns.filter((column) => !existingColumns.has(column));
+		if (missing.length > 0) {
+			throw new Error(
+				`[initDatabase] Schema is missing columns for '${table}': ${missing.join(", ")}. Run D1 migrations before deploy, or enable DB_RUNTIME_MIGRATIONS once for legacy upgrade.`,
+			);
+		}
+	}
+}
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(is_archived)",
-		)
-		.run();
+async function listTableColumns(db: D1Database, table: string): Promise<Set<string>> {
+	const result = await db.prepare(`PRAGMA table_info(${table})`).all();
+	const columns = new Set<string>();
+	for (const row of result.results || []) {
+		const name = (row as { name?: unknown }).name;
+		if (typeof name === "string" && name.length > 0) {
+			columns.add(name);
+		}
+	}
+	return columns;
+}
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, pinned_at DESC)",
-		)
-		.run();
+async function ensureIndexes(db: D1Database) {
+	const indexStatements = [
+		"CREATE INDEX IF NOT EXISTS idx_conversations_project_id ON conversations(project_id)",
+		"CREATE INDEX IF NOT EXISTS idx_conversations_archived ON conversations(is_archived)",
+		"CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations(is_pinned, pinned_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
+		"CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
+		"CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)",
+		"CREATE INDEX IF NOT EXISTS idx_messages_role_timestamp ON messages(role, timestamp)",
+		"CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)",
+		"CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
+		"CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)",
+		"CREATE INDEX IF NOT EXISTS idx_share_links_conversation_id ON conversation_share_links(conversation_id)",
+		"CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON conversation_share_links(user_id)",
+		"CREATE INDEX IF NOT EXISTS idx_share_links_expires_at ON conversation_share_links(expires_at)",
+		"CREATE INDEX IF NOT EXISTS idx_invite_codes_expires_at ON invite_codes(expires_at)",
+		"CREATE INDEX IF NOT EXISTS idx_invite_codes_used_by ON invite_codes(used_by)",
+	];
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)",
-		)
-		.run();
+	for (const sql of indexStatements) {
+		await db.prepare(sql).run();
+	}
+}
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
-		)
-		.run();
+async function runAdminBootstrap(db: D1Database, env?: Env) {
+	const raw = (env ?? {}) as Record<string, unknown>;
+	const adminUsername = resolveString(raw.ADMIN_USERNAME)?.trim() || "admin";
+	const adminPassword =
+		resolveString(raw.ADMIN_PASSWORD)?.trim() ||
+		resolveString(raw.AUTH_PASSWORD)?.trim() ||
+		"";
+	if (!adminPassword) return;
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
-		)
-		.run();
+	try {
+		const adminHash = await hashPassword(adminPassword);
+		const adminUser = await ensureAdminUser(db, {
+			username: adminUsername,
+			passwordHash: adminHash,
+		});
 
-	await db
-		.prepare("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)")
-		.run();
+		await db
+			.prepare(
+				"UPDATE conversations SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
+			)
+			.bind(adminUser.id)
+			.run();
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_messages_role_timestamp ON messages(role, timestamp)",
-		)
-		.run();
+		await db
+			.prepare(
+				"UPDATE projects SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
+			)
+			.bind(adminUser.id)
+			.run();
 
-	await db
-		.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
-		.run();
+		await db
+			.prepare(
+				"UPDATE projects SET is_default = 1 WHERE id = 'default' AND user_id = ?",
+			)
+			.bind(adminUser.id)
+			.run();
 
-	await db
-		.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
-		.run();
+		const { results: defaultResults } = await db
+			.prepare("SELECT id FROM projects WHERE user_id = ? AND is_default = 1 LIMIT 1")
+			.bind(adminUser.id)
+			.all();
 
-	await db
-		.prepare("CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)")
-		.run();
+		if (!defaultResults || defaultResults.length === 0) {
+			const now = Date.now();
+			const defaultId = `default:${adminUser.id}`;
+			await db
+				.prepare(
+					`INSERT OR IGNORE INTO projects (id, user_id, name, description, is_default, created_at, updated_at)
+					VALUES (?, ?, ?, ?, 1, ?, ?)`,
+				)
+				.bind(defaultId, adminUser.id, "默认项目", "默认工作区", now, now)
+				.run();
+		}
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_share_links_conversation_id ON conversation_share_links(conversation_id)",
-		)
-		.run();
+		await db.prepare("DELETE FROM sessions WHERE user_id IS NULL").run();
+	} catch (error) {
+		console.error("[initDatabase] Admin bootstrap failed:", error);
+	}
+}
 
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON conversation_share_links(user_id)",
-		)
-		.run();
-
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_invite_codes_expires_at ON invite_codes(expires_at)",
-		)
-		.run();
-
-	await db
-		.prepare(
-			"CREATE INDEX IF NOT EXISTS idx_invite_codes_used_by ON invite_codes(used_by)",
-		)
-		.run();
-
-	// Ensure default project exists
+async function ensureLegacyDefaultProject(db: D1Database) {
 	await db
 		.prepare(
 			`INSERT OR IGNORE INTO projects (id, user_id, name, description, is_default, created_at, updated_at)
@@ -1050,4 +1029,8 @@ export async function initDatabase(db: D1Database, env?: Env): Promise<void> {
 		)
 		.bind(Date.now(), Date.now())
 		.run();
+}
+
+function resolveString(value: unknown): string | undefined {
+	return typeof value === "string" ? value : undefined;
 }

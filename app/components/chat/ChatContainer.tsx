@@ -12,6 +12,8 @@ import {
 import { useTheme } from "../../hooks/useTheme";
 import { useState } from "react";
 import { format } from "date-fns";
+import { Button } from "../shared/Button";
+import { selectBaseClass, selectCompactClass } from "../shared/form-styles";
 import {
 	createContextClearedEventMessage,
 	getMessagesInActiveContext,
@@ -89,6 +91,7 @@ export function ChatContainer({
 		? getMessagesInActiveContext(currentConversation.messages).filter(isChatTurnMessage)
 				.length
 		: 0;
+	const isConversationPersisted = Boolean(currentConversation?.isPersisted);
 
 	const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
 		if (!currentConversation) return;
@@ -104,7 +107,7 @@ export function ChatContainer({
 	};
 
 	const handleCompact = async () => {
-		if (!currentConversation || isCompacting) return;
+		if (!currentConversation || !isConversationPersisted || isCompacting) return;
 		setIsCompacting(true);
 		try {
 			const response = await fetch("/conversations/compact", {
@@ -141,7 +144,7 @@ export function ChatContainer({
 	};
 
 	const handleArchive = async () => {
-		if (!currentConversation || isArchiving) return;
+		if (!currentConversation || !isConversationPersisted || isArchiving) return;
 		setIsArchiving(true);
 		try {
 			const response = await fetch("/conversations/archive", {
@@ -165,7 +168,14 @@ export function ChatContainer({
 	};
 
 	const handleClearContext = async () => {
-		if (!currentConversation || isClearingContext || isStreaming) return;
+		if (
+			!currentConversation ||
+			!isConversationPersisted ||
+			isClearingContext ||
+			isStreaming
+		) {
+			return;
+		}
 
 		const confirmed =
 			currentConversation.messages.length === 0 ||
@@ -287,7 +297,7 @@ export function ChatContainer({
 						</span>
 					)}
 					<select
-						className="text-sm border border-neutral-200/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 text-neutral-700 dark:text-neutral-200 rounded-xl px-3 py-2 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 cursor-pointer font-semibold transition hover:border-brand-300/60 dark:hover:border-brand-700/50"
+						className={cn(selectBaseClass, "cursor-pointer font-semibold")}
 						value={currentConversation ? `${currentConversation.provider}:${currentConversation.model}` : ""}
 						onChange={handleModelChange}
 						disabled={!currentConversation}
@@ -320,40 +330,57 @@ export function ChatContainer({
 						})}
 					</select>
 
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={handleClearContext}
-						disabled={!currentConversation || isStreaming || isClearingContext}
-						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						disabled={
+							!currentConversation ||
+							!isConversationPersisted ||
+							isStreaming ||
+							isClearingContext
+						}
+						className="ml-2 text-neutral-600 dark:text-neutral-300 disabled:opacity-40"
 						title="开始新的上下文段，后续请求不再携带此前消息"
 					>
 						{isClearingContext ? "清除中..." : "清除上下文"}
-					</button>
+					</Button>
 
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={handleCompact}
 						disabled={
 							!currentConversation ||
+							!isConversationPersisted ||
 							isStreaming ||
 							isCompacting ||
 							activeContextMessageCount < 2
 						}
-						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						className="ml-2 text-neutral-600 dark:text-neutral-300 disabled:opacity-40"
 						title="将当前对话压缩为摘要，用于后续上下文"
 					>
 						{isCompacting ? "压缩中..." : "记忆压缩"}
-					</button>
+					</Button>
 
-					<button
+					<Button
 						type="button"
+						variant="outline"
+						size="sm"
 						onClick={handleArchive}
-						disabled={!currentConversation || isStreaming || isArchiving}
-						className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 shadow-sm hover:border-brand-400/60 hover:text-brand-700 dark:hover:text-brand-200 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 disabled:opacity-40 disabled:cursor-not-allowed"
+						disabled={
+							!currentConversation ||
+							!isConversationPersisted ||
+							isStreaming ||
+							isArchiving
+						}
+						className="ml-2 text-neutral-600 dark:text-neutral-300 disabled:opacity-40"
 						title="将当前对话完整归档到 R2"
 					>
 						{isArchiving ? "归档中..." : "一键归档"}
-					</button>
+					</Button>
 
 					{summaryLabel && (
 						<span className="text-xs text-neutral-400 ml-2 hidden sm:block">
@@ -368,7 +395,7 @@ export function ChatContainer({
 
 					{currentConversation?.model === "o3" && (
 						<select
-							className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+							className={cn(selectCompactClass, "cursor-pointer ml-2 text-neutral-600 dark:text-neutral-300")}
 							value={currentConversation.reasoningEffort || "high"}
 							onChange={(e) => setCurrentConversation({ ...currentConversation, reasoningEffort: e.target.value as "low" | "medium" | "high" })}
 						>
@@ -424,7 +451,7 @@ export function ChatContainer({
 					{currentConversation?.model === "gemini-3-pro" && (
 						<>
 							<select
-								className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+								className={cn(selectCompactClass, "cursor-pointer ml-2 text-neutral-600 dark:text-neutral-300")}
 								value={currentConversation.thinkingLevel || "high"}
 								onChange={(e) => setCurrentConversation({ ...currentConversation, thinkingLevel: e.target.value as "low" | "medium" | "high" })}
 							>
@@ -466,7 +493,7 @@ export function ChatContainer({
 							</label>
 							{(currentConversation.webSearch ?? true) && (
 								<select
-									className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+									className={cn(selectCompactClass, "cursor-pointer ml-2 text-neutral-600 dark:text-neutral-300")}
 									value={currentConversation.xaiSearchMode ?? "x"}
 									onChange={(e) =>
 										setCurrentConversation({
@@ -486,7 +513,7 @@ export function ChatContainer({
 					{currentConversation?.provider === "poloai" &&
 						currentConversation.model.startsWith("claude-opus") && (
 							<select
-								className="text-xs border border-neutral-200/70 dark:border-neutral-700/70 rounded-lg px-3 py-2 bg-white/70 dark:bg-neutral-900/60 text-neutral-600 dark:text-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 cursor-pointer ml-2 shadow-sm"
+								className={cn(selectCompactClass, "cursor-pointer ml-2 text-neutral-600 dark:text-neutral-300")}
 								value={currentConversation.outputEffort || "max"}
 								onChange={(e) =>
 									setCurrentConversation({

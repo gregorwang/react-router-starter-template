@@ -1,0 +1,19 @@
+# Strict libcheck baseline (normalized TS error signatures)
+# Auto-generated via: node scripts/strict-libcheck-check.mjs --update-baseline
+TS2304: Cannot find name 'Worker'.
+TS2305: Module '"@cspotcode/source-map-support"' has no exported member 'cspotcodeSourceMapSupport'.
+TS2307: Cannot find module '..' or its corresponding type declarations.
+TS2307: Cannot find module './core' or its corresponding type declarations.
+TS2307: Cannot find module './ratelimit' or its corresponding type declarations.
+TS2307: Cannot find module './shared' or its corresponding type declarations.
+TS2307: Cannot find module '@cloudflare/containers-shared' or its corresponding type declarations.
+TS2307: Cannot find module '@cloudflare/workers-shared' or its corresponding type declarations.
+TS2307: Cannot find module '@cloudflare/workers-utils' or its corresponding type declarations.
+TS2307: Cannot find module '@puppeteer/browsers' or its corresponding type declarations.
+TS2307: Cannot find module 'cloudflare' or its corresponding type declarations.
+TS2307: Cannot find module 'devtools-protocol/types/protocol-mapping' or its corresponding type declarations.
+TS2307: Cannot find module 'yargs' or its corresponding type declarations.
+TS2344: Type 'MockAgent<Options>' does not satisfy the constraint 'Options'.
+TS2552: Cannot find name 'AddEventListenerOptions'. Did you mean 'EventListenerOptions'?
+TS7016: Could not find a declaration file for module 'workerd'. 'C:/Users/汪家俊/react-router-starter-template/node_modules/workerd/lib/main.js' implicitly has an 'any' type.
+TS7016: Could not find a declaration file for module 'ws'. 'C:/Users/汪家俊/react-router-starter-template/node_modules/ws/wrapper.mjs' implicitly has an 'any' type.
