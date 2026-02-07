@@ -5,6 +5,7 @@ import {
 	isChatTurnMessage,
 } from "../lib/chat/context-boundary";
 import { consumeSSEJson } from "../lib/utils/sse";
+import { POLO_DEFAULT_OUTPUT_TOKENS } from "../lib/llm/defaults";
 
 import type { Attachment, LLMMessage, Message } from "../lib/llm/types";
 
@@ -294,7 +295,7 @@ export function useChat() {
 					provider === "xai" ? (currentConversation.xaiSearchMode ?? "x") : undefined;
 				const payloadOutputTokens =
 					provider === "poloai"
-						? (currentConversation.outputTokens ?? 2048)
+						? (currentConversation.outputTokens ?? POLO_DEFAULT_OUTPUT_TOKENS)
 						: currentConversation.outputTokens;
 				const payloadEnableTools =
 					provider === "poloai"

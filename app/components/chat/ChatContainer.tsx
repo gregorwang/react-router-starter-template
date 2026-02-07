@@ -19,6 +19,12 @@ import {
 	getMessagesInActiveContext,
 	isChatTurnMessage,
 } from "../../lib/chat/context-boundary";
+import {
+	POLO_DEFAULT_OUTPUT_TOKENS,
+	POLO_OUTPUT_TOKENS_MAX,
+	POLO_OUTPUT_TOKENS_MIN,
+	POLO_OUTPUT_TOKENS_STEP,
+} from "../../lib/llm/defaults";
 
 interface ChatContainerProps {
 	className?: string;
@@ -651,22 +657,27 @@ export function ChatContainer({
 							</span>
 							<input
 								type="range"
-								min="512"
-								max="32768"
-								step="512"
+								min={POLO_OUTPUT_TOKENS_MIN}
+								max={POLO_OUTPUT_TOKENS_MAX}
+								step={POLO_OUTPUT_TOKENS_STEP}
 								className="w-24 h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700 accent-brand-600"
-								value={currentConversation.outputTokens || 2048}
+								value={
+									currentConversation.outputTokens ??
+									POLO_DEFAULT_OUTPUT_TOKENS
+								}
 								onChange={(e) =>
 									setCurrentConversation({
 										...currentConversation,
 										outputTokens: parseInt(e.target.value),
 									})
 								}
-								title={`输出预算：${currentConversation.outputTokens || 2048} tokens`}
+								title={`输出预算：${currentConversation.outputTokens ?? POLO_DEFAULT_OUTPUT_TOKENS} tokens`}
 							/>
 							<span className="text-xs text-neutral-500 w-12 text-right">
 								{(() => {
-									const value = currentConversation.outputTokens || 2048;
+									const value =
+										currentConversation.outputTokens ??
+										POLO_DEFAULT_OUTPUT_TOKENS;
 									const kValue = value / 1024;
 									const label = kValue.toFixed(1).replace(/\.0$/, "");
 									return `${label}k`;

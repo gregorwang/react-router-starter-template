@@ -166,6 +166,35 @@ html.dark body {
 	@apply rounded-xl overflow-x-auto border border-white/5;
 }
 
+.prose .md-code-block {
+	@apply mb-4 overflow-hidden rounded-xl border border-neutral-200/80 dark:border-neutral-700/70 bg-neutral-50/90 dark:bg-neutral-950/85;
+}
+
+.prose .md-code-toolbar {
+	@apply flex items-center justify-between gap-3 px-3 py-2 border-b border-neutral-200/80 dark:border-neutral-700/70 text-[11px] uppercase tracking-[0.12em] text-neutral-600 dark:text-neutral-300 bg-white/80 dark:bg-neutral-900/80;
+}
+
+.prose .md-code-lang {
+	@apply font-semibold text-neutral-500 dark:text-neutral-300;
+}
+
+.prose .md-code-actions {
+	@apply flex items-center gap-2;
+}
+
+.prose .md-code-btn {
+	@apply text-[11px] normal-case px-2 py-1 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-brand-600 dark:hover:text-brand-300 hover:border-brand-300 dark:hover:border-brand-500 transition-colors;
+}
+
+.prose .md-code-content.is-collapsed {
+	display: none;
+}
+
+.prose .md-code-content > pre,
+.prose .md-code-content > .shiki {
+	@apply mb-0 rounded-none border-0;
+}
+
 /* Route progress bar */
 .route-progress {
 	position: fixed;

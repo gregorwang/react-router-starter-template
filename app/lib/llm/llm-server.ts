@@ -1,6 +1,10 @@
 import type { AppLoadContext } from "react-router";
 import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
 import { consumeSSEJson } from "../utils/sse";
+import {
+	POLO_DEFAULT_OUTPUT_TOKENS,
+	POLO_OUTPUT_TOKENS_MIN,
+} from "./defaults";
 
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
@@ -744,8 +748,10 @@ async function streamPoloAIServer(
 		typeof options?.thinkingBudget === "number" ? options.thinkingBudget : 12288;
 	const thinkingBudget = Math.max(1024, Math.floor(rawThinkingBudget));
 	const rawOutputTokens =
-		typeof options?.outputTokens === "number" ? options.outputTokens : 2048;
-	const outputTokens = Math.max(256, Math.floor(rawOutputTokens));
+		typeof options?.outputTokens === "number"
+			? options.outputTokens
+			: POLO_DEFAULT_OUTPUT_TOKENS;
+	const outputTokens = Math.max(POLO_OUTPUT_TOKENS_MIN, Math.floor(rawOutputTokens));
 	const maxTokens = enableThinking ? thinkingBudget + outputTokens : outputTokens;
 	const extraBody = model.startsWith("claude-opus")
 		? { output_effort: options?.outputEffort ?? "max" }
@@ -794,6 +800,14 @@ async function streamPoloAIServer(
 		}
 
 		const toolResults = await runPoloAITools(result.toolUses);
+		aggregatedSearch = mergeSearchMeta(
+			aggregatedSearch,
+			extractSearchMetaFromToolResults(result.toolUses, toolResults),
+		);
+		if (aggregatedSearch) {
+			await writeEvent({ type: "search", search: aggregatedSearch });
+		}
+
 		const toolUseBlocks = result.toolUses.map((toolUse) => ({
 			type: "tool_use",
 			id: toolUse.id,
@@ -1192,6 +1206,8 @@ function evaluateMathExpression(expression: string): number {
 	return values[0];
 }
 
+const POLOAI_WEB_SEARCH_TOOL_NAME = "web_search";
+
 const POLOAI_LOCAL_TOOLS = [
 	{
 		name: "get_time",
@@ -1266,7 +1282,9 @@ function buildPoloAITools(options: {
 	const localToolNames = new Set<string>();
 
 	if (options.webSearch) {
-		tools.push({ type: "web_search_20250305", name: "web_search" });
+		tools.push({ type: "web_search_20250305", name: POLOAI_WEB_SEARCH_TOOL_NAME });
+		// Some vendors proxy Claude server tools as plain tool_use events; enable local fallback execution.
+		localToolNames.add(POLOAI_WEB_SEARCH_TOOL_NAME);
 	}
 
 	if (options.enableTools) {
@@ -1321,9 +1339,140 @@ function buildPoloAIMessages(messages: LLMMessage[]) {
 	});
 }
 
+function decodeHtmlEntities(value: string) {
+	const named: Record<string, string> = {
+		amp: "&",
+		lt: "<",
+		gt: ">",
+		quot: "\"",
+		apos: "'",
+		"#39": "'",
+	};
+	return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, entity: string) => {
+		const key = entity.toLowerCase();
+		if (named[key]) return named[key];
+		if (key.startsWith("#x")) {
+			const parsed = Number.parseInt(key.slice(2), 16);
+			return Number.isFinite(parsed) ? String.fromCharCode(parsed) : _;
+		}
+		if (key.startsWith("#")) {
+			const parsed = Number.parseInt(key.slice(1), 10);
+			return Number.isFinite(parsed) ? String.fromCharCode(parsed) : _;
+		}
+		return _;
+	});
+}
+
+function stripHtml(text: string) {
+	return decodeHtmlEntities(text).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeDuckDuckGoResultUrl(rawHref: string) {
+	const decoded = decodeHtmlEntities(rawHref).trim();
+	if (!decoded) return null;
+	const withScheme = decoded.startsWith("//") ? `https:${decoded}` : decoded;
+	try {
+		const parsed = new URL(withScheme, "https://duckduckgo.com");
+		if (
+			parsed.hostname.includes("duckduckgo.com") &&
+			parsed.pathname === "/l/" &&
+			parsed.searchParams.get("uddg")
+		) {
+			const target = decodeURIComponent(parsed.searchParams.get("uddg") || "");
+			if (/^https?:\/\//i.test(target)) {
+				return target;
+			}
+		}
+		if (/^https?:$/i.test(parsed.protocol)) {
+			return parsed.toString();
+		}
+	} catch {
+		// Ignore invalid URLs from scraping.
+	}
+	return null;
+}
+
+function parseDuckDuckGoHtmlResults(html: string, limit: number) {
+	const results: Array<{ title: string; url: string; snippet?: string }> = [];
+	const anchorPattern =
+		/<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+	let match: RegExpExecArray | null;
+	while ((match = anchorPattern.exec(html)) !== null && results.length < limit) {
+		const href = normalizeDuckDuckGoResultUrl(match[1] || "");
+		if (!href) continue;
+		const title = stripHtml(match[2] || "");
+		if (!title) continue;
+		const preview = html.slice(anchorPattern.lastIndex, anchorPattern.lastIndex + 900);
+		const snippetMatch =
+			preview.match(
+				/<(?:a|div)[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div)>/i,
+			) ?? undefined;
+		const snippet = snippetMatch?.[1] ? stripHtml(snippetMatch[1]) : undefined;
+		results.push({ title, url: href, snippet });
+	}
+	return results;
+}
+
+function resolveWebSearchQuery(input: unknown) {
+	if (typeof input === "string") return input.trim();
+	if (!input || typeof input !== "object") return "";
+	const object = input as Record<string, unknown>;
+	const candidates = [
+		object.query,
+		object.search_query,
+		object.keyword,
+		object.keywords,
+	];
+	for (const candidate of candidates) {
+		if (typeof candidate === "string" && candidate.trim()) {
+			return candidate.trim();
+		}
+	}
+	return "";
+}
+
+function resolveWebSearchLimit(input: unknown) {
+	if (!input || typeof input !== "object") return 5;
+	const value = (input as Record<string, unknown>).max_results;
+	if (typeof value !== "number" || !Number.isFinite(value)) return 5;
+	return Math.max(1, Math.min(8, Math.floor(value)));
+}
+
+async function runPoloAIWebSearchFallback(input: unknown) {
+	const query = resolveWebSearchQuery(input);
+	if (!query) {
+		throw new Error("web_search requires a query");
+	}
+	const limit = resolveWebSearchLimit(input);
+	const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}&kl=us-en`;
+	const response = await fetch(url);
+	if (!response.ok) {
+		throw new Error(`web_search fallback failed: ${response.status}`);
+	}
+	const html = await response.text();
+	const results = parseDuckDuckGoHtmlResults(html, limit);
+	return JSON.stringify({
+		query,
+		provider: "duckduckgo",
+		results,
+	});
+}
+
 async function runPoloAITools(toolUses: PoloAIToolUse[]): Promise<PoloAIToolResult[]> {
 	const results: PoloAIToolResult[] = [];
 	for (const toolUse of toolUses) {
+		if (toolUse.name === POLOAI_WEB_SEARCH_TOOL_NAME) {
+			try {
+				const output = await runPoloAIWebSearchFallback(toolUse.input);
+				results.push({ id: toolUse.id, content: output });
+			} catch (error) {
+				const message =
+					error instanceof Error ? error.message : "web_search fallback failed";
+				results.push({ id: toolUse.id, content: message, isError: true });
+			}
+			continue;
+		}
+
 		const tool = POLOAI_LOCAL_TOOLS.find((entry) => entry.name === toolUse.name);
 		if (!tool) {
 			results.push({
@@ -1430,6 +1579,64 @@ function mergeSearchMeta(
 		provider: next.provider || base.provider,
 		query: next.query || base.query,
 		results: Array.from(resultsMap.values()),
+		citations: Array.from(citations),
+	};
+}
+
+function extractSearchMetaFromToolResults(
+	toolUses: PoloAIToolUse[],
+	toolResults: PoloAIToolResult[],
+): LLMStreamEvent["search"] | undefined {
+	const toolNameById = new Map<string, string>();
+	for (const toolUse of toolUses) {
+		toolNameById.set(toolUse.id, toolUse.name);
+	}
+
+	const aggregated: SearchResult[] = [];
+	const citations = new Set<string>();
+	let query: string | undefined;
+
+	for (const toolResult of toolResults) {
+		if (toolResult.isError) continue;
+		if (toolNameById.get(toolResult.id) !== POLOAI_WEB_SEARCH_TOOL_NAME) continue;
+		try {
+			const payload = JSON.parse(toolResult.content) as {
+				query?: unknown;
+				results?: Array<{
+					title?: unknown;
+					url?: unknown;
+					snippet?: unknown;
+				}>;
+			};
+			if (typeof payload.query === "string" && payload.query.trim()) {
+				query = payload.query.trim();
+			}
+			for (const entry of payload.results || []) {
+				const url = typeof entry?.url === "string" ? entry.url : undefined;
+				const title = typeof entry?.title === "string" ? entry.title : undefined;
+				const text = typeof entry?.snippet === "string" ? entry.snippet : undefined;
+				if (!url && !title && !text) continue;
+				if (url) citations.add(url);
+				aggregated.push({
+					id: `${aggregated.length}`,
+					title,
+					url,
+					text,
+				});
+			}
+		} catch {
+			// Ignore non-JSON tool payloads.
+		}
+	}
+
+	if (aggregated.length === 0 && citations.size === 0) {
+		return undefined;
+	}
+
+	return {
+		provider: "claude",
+		query,
+		results: aggregated,
 		citations: Array.from(citations),
 	};
 }

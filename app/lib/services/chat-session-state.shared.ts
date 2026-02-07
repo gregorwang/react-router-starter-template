@@ -1,4 +1,9 @@
 import type { Conversation, LLMProvider, XAISearchMode } from "../llm/types";
+import {
+	POLO_DEFAULT_OUTPUT_TOKENS,
+	POLO_OUTPUT_TOKENS_MAX,
+	POLO_OUTPUT_TOKENS_MIN,
+} from "../llm/defaults";
 
 const VALID_PROVIDERS = new Set<LLMProvider>([
 	"deepseek",
@@ -13,7 +18,7 @@ const VALID_THINKING_LEVEL = new Set(["low", "medium", "high"]);
 const VALID_OUTPUT_EFFORT = new Set(["low", "medium", "high", "max"]);
 const VALID_XAI_SEARCH_MODE = new Set<XAISearchMode>(["x", "web", "both"]);
 
-export const DEFAULT_OUTPUT_TOKENS = 2048;
+export const DEFAULT_OUTPUT_TOKENS = POLO_DEFAULT_OUTPUT_TOKENS;
 
 type SessionManagedConversationFields = Pick<
 	Conversation,
@@ -131,7 +136,11 @@ export function sanitizeConversationSessionPatch(
 		next.thinkingLevel = patch.thinkingLevel;
 	}
 	if (typeof patch.outputTokens === "number" && Number.isFinite(patch.outputTokens)) {
-		next.outputTokens = clampInt(patch.outputTokens, 256, 32768);
+		next.outputTokens = clampInt(
+			patch.outputTokens,
+			POLO_OUTPUT_TOKENS_MIN,
+			POLO_OUTPUT_TOKENS_MAX,
+		);
 	}
 	if (
 		typeof patch.outputEffort === "string" &&

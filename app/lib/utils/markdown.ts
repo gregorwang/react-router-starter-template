@@ -57,6 +57,16 @@ function normalizeLang(raw?: string) {
 	return map[lang] || lang;
 }
 
+function formatCodeLangLabel(lang: string) {
+	if (!lang || lang === "text") return "TEXT";
+	return lang.toUpperCase();
+}
+
+function renderCodeBlockShell(innerHtml: string, lang: string) {
+	const langLabel = formatCodeLangLabel(lang);
+	return `<div class="md-code-block" data-lang="${escapeHtml(lang)}"><div class="md-code-toolbar"><span class="md-code-lang">${escapeHtml(langLabel)}</span><div class="md-code-actions"><button type="button" class="md-code-btn" data-md-code-toggle aria-expanded="true">折叠</button><button type="button" class="md-code-btn" data-md-code-copy>复制</button></div></div><div class="md-code-content">${innerHtml}</div></div>`;
+}
+
 function getThemeName() {
 	if (typeof document === "undefined") return "github-dark";
 	return document.documentElement.classList.contains("dark")
@@ -121,16 +131,25 @@ async function ensureMarked() {
 			const lang = normalizeLang(code.lang);
 			const theme = getThemeName();
 			if (lang === "text") {
-				return `<pre><code>${escapeHtml(code.text)}</code></pre>`;
+				return renderCodeBlockShell(
+					`<pre><code>${escapeHtml(code.text)}</code></pre>`,
+					lang,
+				);
 			}
 			try {
 				if (!highlighter) {
-					return `<pre><code>${escapeHtml(code.text)}</code></pre>`;
+					return renderCodeBlockShell(
+						`<pre><code>${escapeHtml(code.text)}</code></pre>`,
+						lang,
+					);
 				}
 				const html = highlighter.codeToHtml(code.text, { lang, theme });
-				return html;
+				return renderCodeBlockShell(html, lang);
 			} catch {
-				return `<pre><code>${escapeHtml(code.text)}</code></pre>`;
+				return renderCodeBlockShell(
+					`<pre><code>${escapeHtml(code.text)}</code></pre>`,
+					lang,
+				);
 			}
 		};
 		rendererInstance = renderer;
