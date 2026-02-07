@@ -28,7 +28,16 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at INTEGER NOT NULL,
     summary TEXT,
     summary_updated_at INTEGER,
-    summary_message_count INTEGER
+    summary_message_count INTEGER,
+    reasoning_effort TEXT,
+    enable_thinking INTEGER,
+    thinking_budget INTEGER,
+    thinking_level TEXT,
+    output_tokens INTEGER,
+    output_effort TEXT,
+    web_search INTEGER,
+    xai_search_mode TEXT,
+    enable_tools INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS messages (

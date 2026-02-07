@@ -1,5 +1,13 @@
 import { createRequestHandler } from "react-router";
 import { initDatabase } from "../app/lib/db/conversations.server";
+import {
+	bootstrapStateToPersistedState,
+	mergeConversationSessionState,
+	sanitizeConversationSessionPatch,
+	type ConversationSessionBootstrap,
+	type ConversationSessionPatch,
+	type ConversationSessionState,
+} from "../app/lib/services/chat-session-state.shared";
 
 declare module "react-router" {
 	export interface AppLoadContext {
@@ -197,5 +205,132 @@ export class ChatRateLimiter {
 			}),
 			{ headers: { "Content-Type": "application/json" } },
 		);
+	}
+}
+
+type ChatSessionDORequest =
+	| {
+			op: "get_or_bootstrap";
+			userId: string;
+			bootstrap: ConversationSessionBootstrap;
+	  }
+	| {
+			op: "patch";
+			userId: string;
+			bootstrap: ConversationSessionBootstrap;
+			patch: ConversationSessionPatch;
+	  };
+
+const CHAT_SESSION_STORAGE_KEY = "state";
+
+export class ChatSessionState {
+	private state: DurableObjectState;
+	private cachedState: ConversationSessionState | null | undefined;
+
+	constructor(state: DurableObjectState) {
+		this.state = state;
+		this.cachedState = undefined;
+	}
+
+	private async readState() {
+		if (this.cachedState !== undefined) {
+			return this.cachedState;
+		}
+		const stored = (await this.state.storage.get(CHAT_SESSION_STORAGE_KEY)) as
+			| ConversationSessionState
+			| undefined;
+		this.cachedState = stored ?? null;
+		return this.cachedState;
+	}
+
+	private async writeState(next: ConversationSessionState) {
+		await this.state.storage.put(CHAT_SESSION_STORAGE_KEY, next);
+		this.cachedState = next;
+		return next;
+	}
+
+	private ensureBootstrapState(bootstrap: ConversationSessionBootstrap) {
+		return bootstrapStateToPersistedState(bootstrap);
+	}
+
+	private buildError(status: number, error: string) {
+		return new Response(JSON.stringify({ ok: false, error }), {
+			status,
+			headers: { "Content-Type": "application/json" },
+		});
+	}
+
+	private buildOk(state: ConversationSessionState) {
+		return new Response(JSON.stringify({ ok: true, state }), {
+			headers: { "Content-Type": "application/json" },
+		});
+	}
+
+	async fetch(request: Request): Promise<Response> {
+		if (request.method !== "POST") {
+			return new Response("Method not allowed", { status: 405 });
+		}
+
+		let payload: ChatSessionDORequest;
+		try {
+			payload = (await request.json()) as ChatSessionDORequest;
+		} catch {
+			return this.buildError(400, "Invalid JSON payload");
+		}
+
+		if (
+			!payload ||
+			typeof payload !== "object" ||
+			!payload.op ||
+			typeof payload.userId !== "string" ||
+			!payload.userId.trim() ||
+			!payload.bootstrap ||
+			typeof payload.bootstrap !== "object"
+		) {
+			return this.buildError(400, "Invalid payload");
+		}
+
+		const userId = payload.userId.trim();
+		const bootstrap = payload.bootstrap;
+		if (
+			typeof bootstrap.conversationId !== "string" ||
+			!bootstrap.conversationId.trim() ||
+			typeof bootstrap.userId !== "string" ||
+			bootstrap.userId.trim() !== userId
+		) {
+			return this.buildError(400, "Invalid bootstrap state");
+		}
+
+		return this.state.blockConcurrencyWhile(async () => {
+			const current = await this.readState();
+			const base = current ?? this.ensureBootstrapState(bootstrap);
+
+			if (base.userId !== userId) {
+				return this.buildError(403, "Conversation state belongs to another user");
+			}
+
+			if (payload.op === "get_or_bootstrap") {
+				if (!current) {
+					await this.writeState(base);
+				}
+				return this.buildOk(base);
+			}
+
+			if (payload.op !== "patch") {
+				return this.buildError(400, "Unsupported operation");
+			}
+
+			const patch = sanitizeConversationSessionPatch(payload.patch || {});
+			const next = mergeConversationSessionState(base, patch, Date.now());
+			if (next.version === base.version) {
+				if (!current) {
+					await this.writeState(base);
+				}
+				return this.buildOk(base);
+			}
+
+			await this.writeState(next);
+			return this.buildOk(next);
+		});
 	}
 }

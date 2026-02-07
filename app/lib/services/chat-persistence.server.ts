@@ -8,6 +8,7 @@ import {
 } from "../db/conversations.server";
 import { estimateUsage } from "./chat-action-guards.server";
 import { collectSSEChatResult } from "./chat-stream.server";
+import type { ConversationSessionState } from "./chat-session-state.shared";
 
 export async function persistChatResult(options: {
 	db: D1Database;
@@ -16,6 +17,7 @@ export async function persistChatResult(options: {
 	conversationId: string;
 	provider: LLMProvider;
 	model: string;
+	sessionState?: ConversationSessionState;
 	userMessageId: string;
 	assistantMessageId: string;
 	requestMessages: LLMMessage[];
@@ -84,8 +86,17 @@ export async function persistChatResult(options: {
 		{
 			updatedAt: Date.now(),
 			title: nextTitle,
-			provider: options.provider,
-			model: options.model,
+			provider: options.sessionState?.provider ?? options.provider,
+			model: options.sessionState?.model ?? options.model,
+			reasoningEffort: options.sessionState?.reasoningEffort,
+			enableThinking: options.sessionState?.enableThinking,
+			thinkingBudget: options.sessionState?.thinkingBudget,
+			thinkingLevel: options.sessionState?.thinkingLevel,
+			outputTokens: options.sessionState?.outputTokens,
+			outputEffort: options.sessionState?.outputEffort,
+			webSearch: options.sessionState?.webSearch,
+			xaiSearchMode: options.sessionState?.xaiSearchMode,
+			enableTools: options.sessionState?.enableTools,
 		},
 		[userMessage, assistantMessage],
 	);

@@ -55,6 +55,10 @@
 			{
 				"name": "CHAT_RATE_LIMITER_DO",
 				"class_name": "ChatRateLimiter"
+			},
+			{
+				"name": "CHAT_SESSION_DO",
+				"class_name": "ChatSessionState"
 			}
 		]
 	},
@@ -63,6 +67,12 @@
 			"tag": "v1",
 			"new_sqlite_classes": [
 				"ChatRateLimiter"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"ChatSessionState"
 			]
 		}
 	]

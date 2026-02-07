@@ -63,6 +63,15 @@ export interface DBConversation {
 	summary?: string;
 	summary_updated_at?: number;
 	summary_message_count?: number;
+	reasoning_effort?: string;
+	enable_thinking?: number;
+	thinking_budget?: number;
+	thinking_level?: string;
+	output_tokens?: number;
+	output_effort?: string;
+	web_search?: number;
+	xai_search_mode?: string;
+	enable_tools?: number;
 }
 
 export interface DBMessage {
@@ -96,6 +105,51 @@ function parseStoredMessages(
 	});
 }
 
+function toOptionalBoolean(value: unknown): boolean | undefined {
+	if (value === null || value === undefined) return undefined;
+	return Boolean(value);
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+	return undefined;
+}
+
+function mapConversationRow(row: any, messages: Message[]): Conversation {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		projectId: row.project_id,
+		title: row.title,
+		provider: row.provider,
+		model: row.model,
+		isArchived: Boolean(row.is_archived),
+		isPinned: Boolean(row.is_pinned),
+		pinnedAt: toOptionalNumber(row.pinned_at),
+		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
+		forkedFromMessageId: row.forked_from_message_id ?? undefined,
+		forkedAt: toOptionalNumber(row.forked_at),
+		createdAt: row.created_at,
+		updatedAt: row.updated_at,
+		isPersisted: true,
+		summary: row.summary || undefined,
+		summaryUpdatedAt: toOptionalNumber(row.summary_updated_at),
+		summaryMessageCount: toOptionalNumber(row.summary_message_count),
+		reasoningEffort: row.reasoning_effort ?? undefined,
+		enableThinking: toOptionalBoolean(row.enable_thinking),
+		thinkingBudget: toOptionalNumber(row.thinking_budget),
+		thinkingLevel: row.thinking_level ?? undefined,
+		outputTokens: toOptionalNumber(row.output_tokens),
+		outputEffort: row.output_effort ?? undefined,
+		webSearch: toOptionalBoolean(row.web_search),
+		xaiSearchMode: row.xai_search_mode ?? undefined,
+		enableTools: toOptionalBoolean(row.enable_tools),
+		messages,
+	};
+}
+
 // Server-side database operations
 export async function getConversations(
 	db: D1Database,
@@ -123,26 +177,8 @@ export async function getConversations(
 	const { results } = result;
 
 	return (results || []).map((row: any) => ({
-		id: row.id,
-		userId: row.user_id,
-		projectId: row.project_id,
-		title: row.title,
-		provider: row.provider,
-		model: row.model,
-		isArchived: Boolean(row.is_archived),
-		isPinned: Boolean(row.is_pinned),
-		pinnedAt: row.pinned_at ?? undefined,
-		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
-		forkedFromMessageId: row.forked_from_message_id ?? undefined,
-		forkedAt: row.forked_at ?? undefined,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		isPersisted: true,
-		summary: row.summary || undefined,
-		summaryUpdatedAt: row.summary_updated_at ?? undefined,
-		summaryMessageCount: row.summary_message_count ?? undefined,
+		...mapConversationRow(row, []),
 		messageCount: Number(row.message_count || 0),
-		messages: [],
 	}));
 }
 
@@ -165,27 +201,7 @@ export async function getConversationIndex(
 	logD1("getConversationIndex", result.meta);
 	const { results } = result;
 
-	return (results || []).map((row: any) => ({
-		id: row.id,
-		userId: row.user_id,
-		projectId: row.project_id,
-		title: row.title,
-		provider: row.provider,
-		model: row.model,
-		isArchived: Boolean(row.is_archived),
-		isPinned: Boolean(row.is_pinned),
-		pinnedAt: row.pinned_at ?? undefined,
-		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
-		forkedFromMessageId: row.forked_from_message_id ?? undefined,
-		forkedAt: row.forked_at ?? undefined,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		isPersisted: true,
-		summary: row.summary || undefined,
-		summaryUpdatedAt: row.summary_updated_at ?? undefined,
-		summaryMessageCount: row.summary_message_count ?? undefined,
-		messages: [],
-	}));
+	return (results || []).map((row: any) => mapConversationRow(row, []));
 }
 
 export async function getConversation(
@@ -213,27 +229,10 @@ export async function getConversation(
 	}
 
 	const row = results[0] as any;
-	return {
-		id: row.id,
-		userId: row.user_id,
-		projectId: row.project_id,
-		title: row.title,
-		provider: row.provider,
-		model: row.model,
-		isArchived: Boolean(row.is_archived),
-		isPinned: Boolean(row.is_pinned),
-		pinnedAt: row.pinned_at ?? undefined,
-		forkedFromConversationId: row.forked_from_conversation_id ?? undefined,
-		forkedFromMessageId: row.forked_from_message_id ?? undefined,
-		forkedAt: row.forked_at ?? undefined,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		isPersisted: true,
-		summary: row.summary || undefined,
-		summaryUpdatedAt: row.summary_updated_at ?? undefined,
-		summaryMessageCount: row.summary_message_count ?? undefined,
-		messages: parseStoredMessages(row.messages, `conversation:${row.id}`),
-	};
+	return mapConversationRow(
+		row,
+		parseStoredMessages(row.messages, `conversation:${row.id}`),
+	);
 }
 
 export interface ProjectUsageTotals {
@@ -432,9 +431,18 @@ export async function saveConversation(
 					updated_at,
 					summary,
 					summary_updated_at,
-					summary_message_count
+					summary_message_count,
+					reasoning_effort,
+					enable_thinking,
+					thinking_budget,
+					thinking_level,
+					output_tokens,
+					output_effort,
+					web_search,
+					xai_search_mode,
+					enable_tools
 				)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				user_id = excluded.user_id,
 				project_id = excluded.project_id,
@@ -450,7 +458,16 @@ export async function saveConversation(
 				updated_at = excluded.updated_at,
 				summary = COALESCE(excluded.summary, summary),
 				summary_updated_at = COALESCE(excluded.summary_updated_at, summary_updated_at),
-				summary_message_count = COALESCE(excluded.summary_message_count, summary_message_count)`,
+				summary_message_count = COALESCE(excluded.summary_message_count, summary_message_count),
+				reasoning_effort = COALESCE(excluded.reasoning_effort, reasoning_effort),
+				enable_thinking = COALESCE(excluded.enable_thinking, enable_thinking),
+				thinking_budget = COALESCE(excluded.thinking_budget, thinking_budget),
+				thinking_level = COALESCE(excluded.thinking_level, thinking_level),
+				output_tokens = COALESCE(excluded.output_tokens, output_tokens),
+				output_effort = COALESCE(excluded.output_effort, output_effort),
+				web_search = COALESCE(excluded.web_search, web_search),
+				xai_search_mode = COALESCE(excluded.xai_search_mode, xai_search_mode),
+				enable_tools = COALESCE(excluded.enable_tools, enable_tools)`,
 			)
 			.bind(
 				conversation.id,
@@ -470,6 +487,15 @@ export async function saveConversation(
 				conversation.summary ?? null,
 				conversation.summaryUpdatedAt ?? null,
 				conversation.summaryMessageCount ?? null,
+				conversation.reasoningEffort ?? null,
+				conversation.enableThinking === undefined ? null : conversation.enableThinking ? 1 : 0,
+				conversation.thinkingBudget ?? null,
+				conversation.thinkingLevel ?? null,
+				conversation.outputTokens ?? null,
+				conversation.outputEffort ?? null,
+				conversation.webSearch === undefined ? null : conversation.webSearch ? 1 : 0,
+				conversation.xaiSearchMode ?? null,
+				conversation.enableTools === undefined ? null : conversation.enableTools ? 1 : 0,
 			),
 	);
 
@@ -511,12 +537,36 @@ export async function appendConversationMessages(
 		title?: string;
 		provider?: string;
 		model?: string;
+		reasoningEffort?: "low" | "medium" | "high";
+		enableThinking?: boolean;
+		thinkingBudget?: number;
+		thinkingLevel?: "low" | "medium" | "high";
+		outputTokens?: number;
+		outputEffort?: "low" | "medium" | "high" | "max";
+		webSearch?: boolean;
+		xaiSearchMode?: "x" | "web" | "both";
+		enableTools?: boolean;
 		resetSummary?: boolean;
 	},
 	messages: Message[],
 ): Promise<void> {
 	const statements: D1PreparedStatement[] = [];
-	const { updatedAt, title, provider, model, resetSummary } = options;
+	const {
+		updatedAt,
+		title,
+		provider,
+		model,
+		reasoningEffort,
+		enableThinking,
+		thinkingBudget,
+		thinkingLevel,
+		outputTokens,
+		outputEffort,
+		webSearch,
+		xaiSearchMode,
+		enableTools,
+		resetSummary,
+	} = options;
 	const shouldResetSummary = resetSummary ? 1 : 0;
 
 	statements.push(
@@ -526,6 +576,15 @@ export async function appendConversationMessages(
 				SET title = COALESCE(?, title),
 					provider = COALESCE(?, provider),
 					model = COALESCE(?, model),
+					reasoning_effort = COALESCE(?, reasoning_effort),
+					enable_thinking = COALESCE(?, enable_thinking),
+					thinking_budget = COALESCE(?, thinking_budget),
+					thinking_level = COALESCE(?, thinking_level),
+					output_tokens = COALESCE(?, output_tokens),
+					output_effort = COALESCE(?, output_effort),
+					web_search = COALESCE(?, web_search),
+					xai_search_mode = COALESCE(?, xai_search_mode),
+					enable_tools = COALESCE(?, enable_tools),
 					updated_at = ?,
 					summary = CASE WHEN ? = 1 THEN NULL ELSE summary END,
 					summary_updated_at = CASE WHEN ? = 1 THEN NULL ELSE summary_updated_at END,
@@ -536,6 +595,15 @@ export async function appendConversationMessages(
 				title ?? null,
 				provider ?? null,
 				model ?? null,
+				reasoningEffort ?? null,
+				enableThinking === undefined ? null : enableThinking ? 1 : 0,
+				thinkingBudget ?? null,
+				thinkingLevel ?? null,
+				outputTokens ?? null,
+				outputEffort ?? null,
+				webSearch === undefined ? null : webSearch ? 1 : 0,
+				xaiSearchMode ?? null,
+				enableTools === undefined ? null : enableTools ? 1 : 0,
 				updatedAt,
 				shouldResetSummary,
 				shouldResetSummary,
@@ -587,6 +655,64 @@ export async function updateConversationSummary(
 			WHERE id = ? AND user_id = ?`,
 		)
 		.bind(summary, summaryUpdatedAt, summaryMessageCount, id, userId)
+		.run();
+}
+
+export async function updateConversationSessionSettings(
+	db: D1Database,
+	userId: string,
+	id: string,
+	options: {
+		updatedAt: number;
+		projectId?: string;
+		provider?: string;
+		model?: string;
+		reasoningEffort?: "low" | "medium" | "high";
+		enableThinking?: boolean;
+		thinkingBudget?: number;
+		thinkingLevel?: "low" | "medium" | "high";
+		outputTokens?: number;
+		outputEffort?: "low" | "medium" | "high" | "max";
+		webSearch?: boolean;
+		xaiSearchMode?: "x" | "web" | "both";
+		enableTools?: boolean;
+	},
+): Promise<void> {
+	await db
+		.prepare(
+			`UPDATE conversations
+			SET project_id = COALESCE(?, project_id),
+				provider = COALESCE(?, provider),
+				model = COALESCE(?, model),
+				reasoning_effort = COALESCE(?, reasoning_effort),
+				enable_thinking = COALESCE(?, enable_thinking),
+				thinking_budget = COALESCE(?, thinking_budget),
+				thinking_level = COALESCE(?, thinking_level),
+				output_tokens = COALESCE(?, output_tokens),
+				output_effort = COALESCE(?, output_effort),
+				web_search = COALESCE(?, web_search),
+				xai_search_mode = COALESCE(?, xai_search_mode),
+				enable_tools = COALESCE(?, enable_tools),
+				updated_at = ?
+			WHERE id = ? AND user_id = ?`,
+		)
+		.bind(
+			options.projectId ?? null,
+			options.provider ?? null,
+			options.model ?? null,
+			options.reasoningEffort ?? null,
+			options.enableThinking === undefined ? null : options.enableThinking ? 1 : 0,
+			options.thinkingBudget ?? null,
+			options.thinkingLevel ?? null,
+			options.outputTokens ?? null,
+			options.outputEffort ?? null,
+			options.webSearch === undefined ? null : options.webSearch ? 1 : 0,
+			options.xaiSearchMode ?? null,
+			options.enableTools === undefined ? null : options.enableTools ? 1 : 0,
+			options.updatedAt,
+			id,
+			userId,
+		)
 		.run();
 }
 
@@ -735,6 +861,15 @@ const REQUIRED_SCHEMA_COLUMNS: Record<string, string[]> = {
 		"summary",
 		"summary_updated_at",
 		"summary_message_count",
+		"reasoning_effort",
+		"enable_thinking",
+		"thinking_budget",
+		"thinking_level",
+		"output_tokens",
+		"output_effort",
+		"web_search",
+		"xai_search_mode",
+		"enable_tools",
 	],
 	messages: ["meta"],
 	sessions: ["user_id", "expires_at"],
@@ -771,7 +906,16 @@ async function ensureBaseTables(db: D1Database) {
 				updated_at INTEGER NOT NULL,
 				summary TEXT,
 				summary_updated_at INTEGER,
-				summary_message_count INTEGER
+				summary_message_count INTEGER,
+				reasoning_effort TEXT,
+				enable_thinking INTEGER,
+				thinking_budget INTEGER,
+				thinking_level TEXT,
+				output_tokens INTEGER,
+				output_effort TEXT,
+				web_search INTEGER,
+				xai_search_mode TEXT,
+				enable_tools INTEGER
 			)`,
 		)
 		.run();
@@ -889,6 +1033,15 @@ async function runRuntimeLegacyMigrations(db: D1Database) {
 		"ALTER TABLE conversations ADD COLUMN summary TEXT",
 		"ALTER TABLE conversations ADD COLUMN summary_updated_at INTEGER",
 		"ALTER TABLE conversations ADD COLUMN summary_message_count INTEGER",
+		"ALTER TABLE conversations ADD COLUMN reasoning_effort TEXT",
+		"ALTER TABLE conversations ADD COLUMN enable_thinking INTEGER",
+		"ALTER TABLE conversations ADD COLUMN thinking_budget INTEGER",
+		"ALTER TABLE conversations ADD COLUMN thinking_level TEXT",
+		"ALTER TABLE conversations ADD COLUMN output_tokens INTEGER",
+		"ALTER TABLE conversations ADD COLUMN output_effort TEXT",
+		"ALTER TABLE conversations ADD COLUMN web_search INTEGER",
+		"ALTER TABLE conversations ADD COLUMN xai_search_mode TEXT",
+		"ALTER TABLE conversations ADD COLUMN enable_tools INTEGER",
 		"ALTER TABLE conversations ADD COLUMN forked_from_conversation_id TEXT",
 		"ALTER TABLE conversations ADD COLUMN forked_from_message_id TEXT",
 		"ALTER TABLE conversations ADD COLUMN forked_at INTEGER",

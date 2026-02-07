@@ -6,6 +6,7 @@ import {
 } from "../lib/db/conversations.server";
 import { createContextClearedEventMessage } from "../lib/chat/context-boundary";
 import { requireAuth } from "../lib/auth.server";
+import { resolveConversationSessionState } from "../lib/services/chat-session-state.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -44,6 +45,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 		},
 		[marker],
 	);
+	await resolveConversationSessionState({
+		env: context.cloudflare.env,
+		userId: user.id,
+		conversation,
+		patch: {
+			clearSummary: true,
+		},
+	});
 
 	if (context.cloudflare.env.SETTINGS_KV) {
 		await invalidateConversationCaches(

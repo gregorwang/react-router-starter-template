@@ -4,6 +4,10 @@ import { invalidateUsageStatsCache } from "../lib/cache/usage-stats.server";
 import { getConversation, saveConversation } from "../lib/db/conversations.server";
 import type { Message } from "../lib/llm/types";
 import { requireAuth } from "../lib/auth.server";
+import {
+	applyConversationSessionState,
+	resolveConversationSessionState,
+} from "../lib/services/chat-session-state.server";
 
 const DEFAULT_FORK_SUFFIX = " (Branch)";
 const MAX_TITLE_LENGTH = 120;
@@ -65,34 +69,60 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (!sourceConversation) {
 		return new Response("Conversation not found", { status: 404 });
 	}
+	const sourceSession = await resolveConversationSessionState({
+		env: context.cloudflare.env,
+		userId: user.id,
+		conversation: sourceConversation,
+	});
+	const sourceConversationWithState = applyConversationSessionState(
+		sourceConversation,
+		sourceSession,
+	);
 
-	const messageIndex = sourceConversation.messages.findIndex(
+	const messageIndex = sourceConversationWithState.messages.findIndex(
 		(message) => message.id === sourceMessageId,
 	);
 	if (messageIndex < 0) {
 		return new Response("Message not found", { status: 404 });
 	}
-	const sourceMessage = sourceConversation.messages[messageIndex];
+	const sourceMessage = sourceConversationWithState.messages[messageIndex];
 
-	const forkedHistory = cloneMessagesUntil(sourceConversation.messages, messageIndex);
+	const forkedHistory = cloneMessagesUntil(sourceConversationWithState.messages, messageIndex);
 	const now = Date.now();
 	const forkedAt = sourceMessage.timestamp || now;
 	const forkedConversation = {
 		id: crypto.randomUUID(),
 		userId: user.id,
-		projectId: sourceConversation.projectId,
-		title: resolveForkTitle(sourceConversation.title, payload.title),
-		provider: sourceConversation.provider,
-		model: sourceConversation.model,
-		forkedFromConversationId: sourceConversation.id,
+		projectId: sourceConversationWithState.projectId,
+		title: resolveForkTitle(sourceConversationWithState.title, payload.title),
+		provider: sourceConversationWithState.provider,
+		model: sourceConversationWithState.model,
+		forkedFromConversationId: sourceConversationWithState.id,
 		forkedFromMessageId: sourceMessageId,
 		forkedAt,
 		createdAt: now,
 		updatedAt: now,
+		summary: sourceConversationWithState.summary,
+		summaryUpdatedAt: sourceConversationWithState.summaryUpdatedAt,
+		summaryMessageCount: sourceConversationWithState.summaryMessageCount,
+		reasoningEffort: sourceConversationWithState.reasoningEffort,
+		enableThinking: sourceConversationWithState.enableThinking,
+		thinkingBudget: sourceConversationWithState.thinkingBudget,
+		thinkingLevel: sourceConversationWithState.thinkingLevel,
+		outputTokens: sourceConversationWithState.outputTokens,
+		outputEffort: sourceConversationWithState.outputEffort,
+		webSearch: sourceConversationWithState.webSearch,
+		xaiSearchMode: sourceConversationWithState.xaiSearchMode,
+		enableTools: sourceConversationWithState.enableTools,
 		messages: forkedHistory,
 	} as const;
 
 	await saveConversation(context.db, forkedConversation);
+	await resolveConversationSessionState({
+		env: context.cloudflare.env,
+		userId: user.id,
+		conversation: forkedConversation,
+	});
 
 	const kv = context.cloudflare.env.SETTINGS_KV;
 	if (kv) {
@@ -111,7 +141,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			ok: true,
 			conversationId: forkedConversation.id,
 			projectId: forkedConversation.projectId,
-			forkedFromConversationId: sourceConversation.id,
+			forkedFromConversationId: sourceConversationWithState.id,
 			forkedFromMessageId: sourceMessageId,
 			forkedAt,
 			importedMessages: forkedHistory.length,

@@ -22,6 +22,10 @@ import {
 import { persistAttachmentsToR2 } from "../lib/adapters/chat-media.server";
 import { enforceRateLimit, resolveActorKey } from "../lib/services/chat-rate-limit.server";
 import { persistChatResult } from "../lib/services/chat-persistence.server";
+import {
+	applyConversationSessionState,
+	resolveConversationSessionState,
+} from "../lib/services/chat-session-state.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -168,12 +172,35 @@ export async function action({ request, context }: Route.ActionArgs) {
 			return conversationResolution.errorResponse;
 		}
 		const existingConversation = conversationResolution.conversation;
+		const sessionState = await resolveConversationSessionState({
+			env: context.cloudflare.env,
+			userId: user.id,
+			conversation: existingConversation,
+			patch: {
+				projectId: projectId || existingConversation.projectId,
+				provider,
+				model,
+				reasoningEffort,
+				enableThinking,
+				thinkingBudget,
+				thinkingLevel,
+				outputTokens,
+				outputEffort,
+				webSearch,
+				xaiSearchMode,
+				enableTools,
+			},
+		});
+		const conversationForRequest = applyConversationSessionState(
+			existingConversation,
+			sessionState,
+		);
 
 		const requestMessages = buildRequestMessages({
 			messages,
 			messagesTrimmed,
-			summary: existingConversation.summary,
-			summaryMessageCount: existingConversation.summaryMessageCount,
+			summary: conversationForRequest.summary,
+			summaryMessageCount: conversationForRequest.summaryMessageCount,
 			promptTokenBudget: CHAT_PROMPT_TOKEN_BUDGET,
 			minContextMessages: CHAT_MIN_CONTEXT_MESSAGES,
 		});
@@ -190,17 +217,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 		}
 
 		// Start streaming LLM response
-		const stream = await streamLLMFromServer(requestMessages, provider, model, context, {
-			reasoningEffort,
-			enableThinking,
-			thinkingBudget,
-			thinkingLevel,
-			outputTokens,
-			outputEffort,
-			webSearch,
-			xaiSearchMode,
-			enableTools,
-		});
+		const stream = await streamLLMFromServer(
+			requestMessages,
+			sessionState.provider,
+			sessionState.model,
+			context,
+			{
+			reasoningEffort: sessionState.reasoningEffort,
+			enableThinking: sessionState.enableThinking,
+			thinkingBudget: sessionState.thinkingBudget,
+			thinkingLevel: sessionState.thinkingLevel,
+			outputTokens: sessionState.outputTokens,
+			outputEffort: sessionState.outputEffort,
+			webSearch: sessionState.webSearch,
+			xaiSearchMode: sessionState.xaiSearchMode,
+			enableTools: sessionState.enableTools,
+			},
+		);
 
 		// Use waitUntil to save the conversation after stream completes
 		const ctx = context.cloudflare.ctx;
@@ -215,13 +248,14 @@ export async function action({ request, context }: Route.ActionArgs) {
 				kv: context.cloudflare.env.SETTINGS_KV,
 				userId: user.id,
 				conversationId,
-				provider,
-				model,
+				provider: sessionState.provider,
+				model: sessionState.model,
 				userMessageId,
 				assistantMessageId,
 				requestMessages,
 				inputMessages: messages,
 				storedAttachments,
+				sessionState,
 				saveStream,
 			}),
 		);

@@ -284,6 +284,23 @@ export function useChat() {
 				}
 
 				// Call the server action instead of client-side LLM APIs
+				const provider = currentConversation.provider;
+				const model = currentConversation.model;
+				const defaultWebSearch =
+					provider === "xai" || provider === "poloai" || model === "gemini-3-pro";
+				const payloadWebSearch =
+					currentConversation.webSearch ?? (defaultWebSearch ? true : undefined);
+				const payloadXaiSearchMode =
+					provider === "xai" ? (currentConversation.xaiSearchMode ?? "x") : undefined;
+				const payloadOutputTokens =
+					provider === "poloai"
+						? (currentConversation.outputTokens ?? 2048)
+						: currentConversation.outputTokens;
+				const payloadEnableTools =
+					provider === "poloai"
+						? (currentConversation.enableTools ?? true)
+						: currentConversation.enableTools;
+
 				const response = await fetch("/chat/action", {
 					method: "POST",
 					headers: {
@@ -302,11 +319,11 @@ export function useChat() {
 						enableThinking: currentConversation.enableThinking,
 						thinkingBudget: currentConversation.thinkingBudget,
 						thinkingLevel: currentConversation.thinkingLevel,
-						outputTokens: currentConversation.outputTokens,
+						outputTokens: payloadOutputTokens,
 						outputEffort: currentConversation.outputEffort,
-						webSearch: currentConversation.webSearch,
-						xaiSearchMode: currentConversation.xaiSearchMode,
-						enableTools: currentConversation.enableTools,
+						webSearch: payloadWebSearch,
+						xaiSearchMode: payloadXaiSearchMode,
+						enableTools: payloadEnableTools,
 					}),
 					signal: abortControllerRef.current.signal,
 				});

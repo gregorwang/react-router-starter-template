@@ -13,6 +13,7 @@ export default [
 	route("conversations/fork", "routes/conversations.fork.ts"),
 	route("conversations/share", "routes/conversations.share.ts"),
 	route("conversations/search", "routes/conversations.search.ts"),
+	route("conversations/session", "routes/conversations.session.ts"),
 	route("conversations/update", "routes/conversations.update.ts"),
 	route("conversations/title", "routes/conversations.title.ts"),
 	route("projects/create", "routes/projects.create.ts"),

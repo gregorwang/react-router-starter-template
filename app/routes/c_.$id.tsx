@@ -12,6 +12,10 @@ import { getConversationIndexCached } from "../lib/cache/conversation-index.serv
 import { getProjects } from "../lib/db/projects.server";
 import { requireAuth } from "../lib/auth.server";
 import { listUserModelLimits } from "../lib/db/user-model-limits.server";
+import {
+	applyConversationSessionState,
+	resolveConversationSessionState,
+} from "../lib/services/chat-session-state.server";
 
 // Server loader - runs in Cloudflare Worker with D1 database
 export async function loader({ context, params, request }: Route.LoaderArgs) {
@@ -86,6 +90,13 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 		};
 		isPlaceholder = true;
 	}
+
+	const sessionState = await resolveConversationSessionState({
+		env,
+		userId: user.id,
+		conversation,
+	});
+	conversation = applyConversationSessionState(conversation, sessionState);
 
 	const activeProjectId =
 		resolveProjectId(projects) || conversation.projectId || projects[0]?.id || "default";

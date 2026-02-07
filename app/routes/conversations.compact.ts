@@ -6,6 +6,10 @@ import {
 	getMessagesInActiveContext,
 	isChatTurnMessage,
 } from "../lib/chat/context-boundary";
+import {
+	applyConversationSessionState,
+	resolveConversationSessionState,
+} from "../lib/services/chat-session-state.server";
 
 export async function action({ request, context }: Route.ActionArgs) {
 	const user = await requireAuth(request, context.db);
@@ -54,8 +58,17 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (!conversation) {
 		return new Response("Conversation not found", { status: 404 });
 	}
+	const sessionState = await resolveConversationSessionState({
+		env: context.cloudflare.env,
+		userId: user.id,
+		conversation,
+	});
+	const conversationWithState = applyConversationSessionState(
+		conversation,
+		sessionState,
+	);
 
-	const messagesSource = payloadMessages || conversation.messages;
+	const messagesSource = payloadMessages || conversationWithState.messages;
 	const activeMessages = getMessagesInActiveContext(messagesSource);
 	const compactMessages = activeMessages.filter(
 		(message): message is { role: "user" | "assistant"; content: string } =>
@@ -76,13 +89,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 	}
 
 	const now = Date.now();
-	const baseSummary = conversation.summary?.trim() || "";
+	const baseSummary = conversationWithState.summary?.trim() || "";
 	const startIndex = baseSummary
 		? Math.max(
 				0,
 				typeof payloadSummaryCount === "number"
 					? payloadSummaryCount
-					: conversation.summaryMessageCount ?? 0,
+					: conversationWithState.summaryMessageCount ?? 0,
 			)
 		: 0;
 	const boundedStartIndex = Math.min(startIndex, compactMessages.length);
@@ -105,7 +118,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	if (env.CHAT_ARCHIVE) {
 		const archiveBody = JSON.stringify(
 			{
-				...conversation,
+				...conversationWithState,
 				messages: messagesSource,
 				updatedAt: now,
 			},
@@ -137,13 +150,23 @@ export async function action({ request, context }: Route.ActionArgs) {
 		now,
 		summaryMessageCount,
 	);
+	const nextState = await resolveConversationSessionState({
+		env: context.cloudflare.env,
+		userId: user.id,
+		conversation: conversationWithState,
+		patch: {
+			summary,
+			summaryUpdatedAt: now,
+			summaryMessageCount,
+		},
+	});
 
 	return Response.json(
 		{
 			ok: true,
-			summary,
-			summaryUpdatedAt: now,
-			summaryMessageCount,
+			summary: nextState.summary,
+			summaryUpdatedAt: nextState.summaryUpdatedAt,
+			summaryMessageCount: nextState.summaryMessageCount,
 			archiveKey,
 		},
 		{ headers: { "Cache-Control": "no-store" } },

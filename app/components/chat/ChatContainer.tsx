@@ -10,7 +10,7 @@ import {
 	type XAISearchMode,
 } from "../../lib/llm/types";
 import { useTheme } from "../../hooks/useTheme";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Button } from "../shared/Button";
 import { selectBaseClass, selectCompactClass } from "../shared/form-styles";
@@ -30,6 +30,21 @@ interface ChatContainerProps {
 	modelAvailability?: Record<string, { available: boolean; reason?: string }>;
 }
 
+type SessionStatePayload = {
+	projectId?: string;
+	provider?: LLMProvider;
+	model?: string;
+	reasoningEffort?: "low" | "medium" | "high";
+	enableThinking?: boolean;
+	thinkingBudget?: number;
+	thinkingLevel?: "low" | "medium" | "high";
+	outputTokens?: number;
+	outputEffort?: "low" | "medium" | "high" | "max";
+	webSearch?: boolean;
+	xaiSearchMode?: XAISearchMode;
+	enableTools?: boolean;
+};
+
 export function ChatContainer({
 	className,
 	onOpenSidebar,
@@ -44,6 +59,8 @@ export function ChatContainer({
 	const [isCompacting, setIsCompacting] = useState(false);
 	const [isArchiving, setIsArchiving] = useState(false);
 	const [isClearingContext, setIsClearingContext] = useState(false);
+	const sessionSyncTimerRef = useRef<number | null>(null);
+	const lastSessionSyncSignatureRef = useRef<string>("");
 
 	const isProviderAvailable = (provider: LLMProvider) => {
 		if (!providerAvailability) return true;
@@ -239,6 +256,100 @@ export function ChatContainer({
 						: ""
 				}`
 			: null;
+
+	const sessionConversationId = currentConversation?.id;
+	const sessionPatch = useMemo(() => {
+		if (!sessionConversationId || !currentConversation) return null;
+		return {
+			projectId: currentConversation.projectId,
+			provider: currentConversation.provider,
+			model: currentConversation.model,
+			reasoningEffort: currentConversation.reasoningEffort,
+			enableThinking: currentConversation.enableThinking,
+			thinkingBudget: currentConversation.thinkingBudget,
+			thinkingLevel: currentConversation.thinkingLevel,
+			outputTokens: currentConversation.outputTokens,
+			outputEffort: currentConversation.outputEffort,
+			webSearch: currentConversation.webSearch,
+			xaiSearchMode: currentConversation.xaiSearchMode,
+			enableTools: currentConversation.enableTools,
+		};
+	}, [
+		sessionConversationId,
+		currentConversation?.projectId,
+		currentConversation?.provider,
+		currentConversation?.model,
+		currentConversation?.reasoningEffort,
+		currentConversation?.enableThinking,
+		currentConversation?.thinkingBudget,
+		currentConversation?.thinkingLevel,
+		currentConversation?.outputTokens,
+		currentConversation?.outputEffort,
+		currentConversation?.webSearch,
+		currentConversation?.xaiSearchMode,
+		currentConversation?.enableTools,
+	]);
+
+	const sessionPatchSignature = sessionPatch ? JSON.stringify(sessionPatch) : "";
+
+	useEffect(() => {
+		if (!sessionConversationId || !sessionPatch) return;
+		if (sessionPatchSignature === lastSessionSyncSignatureRef.current) return;
+
+		if (sessionSyncTimerRef.current) {
+			window.clearTimeout(sessionSyncTimerRef.current);
+		}
+
+		sessionSyncTimerRef.current = window.setTimeout(() => {
+			void (async () => {
+				try {
+					const response = await fetch("/conversations/session", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							conversationId: currentConversation.id,
+							projectId: sessionPatch.projectId,
+							patch: sessionPatch,
+						}),
+					});
+					if (!response.ok) return;
+					const data = (await response.json()) as {
+						ok?: boolean;
+						state?: SessionStatePayload;
+					};
+					if (!data.ok || !data.state) return;
+					lastSessionSyncSignatureRef.current = sessionPatchSignature;
+					setCurrentConversation((prev) => {
+						if (!prev || prev.id !== sessionConversationId) return prev;
+						return {
+							...prev,
+							projectId: data.state?.projectId ?? prev.projectId,
+							provider: data.state?.provider ?? prev.provider,
+							model: data.state?.model ?? prev.model,
+							reasoningEffort: data.state?.reasoningEffort ?? prev.reasoningEffort,
+							enableThinking: data.state?.enableThinking ?? prev.enableThinking,
+							thinkingBudget: data.state?.thinkingBudget ?? prev.thinkingBudget,
+							thinkingLevel: data.state?.thinkingLevel ?? prev.thinkingLevel,
+							outputTokens: data.state?.outputTokens ?? prev.outputTokens,
+							outputEffort: data.state?.outputEffort ?? prev.outputEffort,
+							webSearch: data.state?.webSearch ?? prev.webSearch,
+							xaiSearchMode: data.state?.xaiSearchMode ?? prev.xaiSearchMode,
+							enableTools: data.state?.enableTools ?? prev.enableTools,
+						};
+					});
+				} catch {
+					// Ignore session sync failures and keep local state.
+				}
+			})();
+		}, 350);
+
+		return () => {
+			if (sessionSyncTimerRef.current) {
+				window.clearTimeout(sessionSyncTimerRef.current);
+				sessionSyncTimerRef.current = null;
+			}
+		};
+	}, [sessionConversationId, sessionPatch, sessionPatchSignature, setCurrentConversation]);
 
 	return (
 		<div className={cn("flex flex-col flex-1 min-h-0 relative", className)}>

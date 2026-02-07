@@ -9,6 +9,7 @@ declare global {
 		CHAT_MEDIA?: R2Bucket;
 		CHAT_RATE_LIMITER?: RateLimit;
 		CHAT_RATE_LIMITER_DO?: DurableObjectNamespace;
+		CHAT_SESSION_DO?: DurableObjectNamespace;
 		DEEPSEEK_API_KEY?: string;
 		XAI_API_KEY?: string;
 		POE_API_KEY?: string;
