@@ -279,7 +279,6 @@ export default function Conversation({ loaderData }: Route.ComponentProps) {
 				activeProjectId={activeProjectId}
 				onProjectChange={handleProjectChange}
 				onNewProject={handleCreateProject}
-				isAdmin={currentUser?.role === "admin"}
 				isOpen={sidebarOpen}
 				isCollapsed={sidebarCollapsed}
 				onClose={() => setSidebarOpen(false)}

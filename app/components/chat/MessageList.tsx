@@ -90,7 +90,7 @@ export function MessageList() {
 	if (!currentConversation?.messages.length) {
 		return (
 			<div className="flex items-center justify-center h-full px-4">
-				<div className="rounded-2xl border border-sky-100/80 dark:border-neutral-800/70 bg-[linear-gradient(155deg,rgba(255,255,255,0.93),rgba(236,246,255,0.84))] dark:bg-neutral-900/70 backdrop-blur-xl px-6 py-7 shadow-sm text-center">
+				<div className="rounded-2xl border border-sky-100/80 dark:border-neutral-800/70 bg-[linear-gradient(155deg,rgba(255,255,255,0.93),rgba(236,246,255,0.84))] dark:bg-none dark:bg-neutral-900/70 backdrop-blur-xl px-6 py-7 shadow-sm text-center">
 					<pre className="text-[11px] leading-4 text-sky-600/80 dark:text-sky-300/80 font-mono select-none">
 {String.raw`      /\_/\
    .-( o.o )-.

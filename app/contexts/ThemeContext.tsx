@@ -1,7 +1,80 @@
-import { createContext, useContext, useEffect, useState } from "react";
-
+import {
+	createContext,
+	useContext,
+	useEffect,
+	useLayoutEffect,
+	useState,
+} from "react";
 
 type Theme = "light" | "dark";
+const THEME_STORAGE_KEY = "theme";
+
+function isTheme(value: unknown): value is Theme {
+	return value === "light" || value === "dark";
+}
+
+function readStoredTheme(): Theme | null {
+	try {
+		const stored = localStorage.getItem(THEME_STORAGE_KEY);
+		return isTheme(stored) ? stored : null;
+	} catch {
+		return null;
+	}
+}
+
+function writeStoredTheme(theme: Theme) {
+	try {
+		localStorage.setItem(THEME_STORAGE_KEY, theme);
+	} catch {
+		// Ignore storage failures (private mode, quota, policy restrictions).
+	}
+}
+
+function prefersDarkScheme() {
+	try {
+		return window.matchMedia("(prefers-color-scheme: dark)").matches;
+	} catch {
+		return false;
+	}
+}
+
+function prefersReducedMotion() {
+	try {
+		return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	} catch {
+		return false;
+	}
+}
+
+function runThemeTransition(targetTheme: Theme) {
+	if (typeof window === "undefined" || typeof document === "undefined") return;
+	if (prefersReducedMotion()) return;
+	const root = document.documentElement;
+	root.classList.remove("theme-corner-transition-dark", "theme-corner-transition-light");
+	// Force reflow so repeated toggles retrigger the animation class.
+	void root.offsetWidth;
+	root.classList.add(
+		targetTheme === "dark"
+			? "theme-corner-transition-dark"
+			: "theme-corner-transition-light",
+	);
+	window.setTimeout(() => {
+		root.classList.remove("theme-corner-transition-dark", "theme-corner-transition-light");
+	}, 620);
+}
+
+function getInitialTheme(): Theme {
+	if (typeof window === "undefined") {
+		return "dark";
+	}
+	const stored = readStoredTheme();
+	if (stored) {
+		return stored;
+	}
+	return prefersDarkScheme() ? "dark" : "light";
+}
+
+const useSafeLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface ThemeContextValue {
 	theme: Theme;
@@ -11,44 +84,41 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-	const [theme, setTheme] = useState<Theme>("dark");
+	const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
 	useEffect(() => {
-		const stored = localStorage.getItem("theme") as Theme | null;
-		if (stored) {
-			setTheme(stored);
-		} else {
-			const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-			setTheme(isDark ? "dark" : "light");
+		let mediaQuery: MediaQueryList | null = null;
+		try {
+			mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+		} catch {
+			mediaQuery = null;
 		}
-	}, []);
+		if (!mediaQuery) return;
 
-	useEffect(() => {
-		const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-		const handleMediaChange = (e: MediaQueryListEvent) => {
-			if (!localStorage.getItem("theme")) {
+		const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
+			if (!readStoredTheme()) {
 				setTheme(e.matches ? "dark" : "light");
 			}
 		};
 
-		mediaQuery.addEventListener("change", handleMediaChange);
-		return () => mediaQuery.removeEventListener("change", handleMediaChange);
+		if (typeof mediaQuery.addEventListener === "function") {
+			mediaQuery.addEventListener("change", handleMediaChange);
+			return () => mediaQuery?.removeEventListener("change", handleMediaChange);
+		}
+
+		mediaQuery.addListener(handleMediaChange);
+		return () => mediaQuery?.removeListener(handleMediaChange);
 	}, []);
 
-	useEffect(() => {
-		if (theme === "dark") {
-			document.documentElement.classList.add("dark");
-		} else {
-			document.documentElement.classList.remove("dark");
-		}
+	useSafeLayoutEffect(() => {
+		document.documentElement.classList.toggle("dark", theme === "dark");
 	}, [theme]);
 
 	const toggleTheme = () => {
-		setTheme((prev) => {
-			const newTheme = prev === "light" ? "dark" : "light";
-			localStorage.setItem("theme", newTheme);
-			return newTheme;
-		});
+		const nextTheme = theme === "light" ? "dark" : "light";
+		runThemeTransition(nextTheme);
+		writeStoredTheme(nextTheme);
+		setTheme(nextTheme);
 	};
 
 	return (

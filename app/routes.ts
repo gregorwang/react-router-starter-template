@@ -24,6 +24,7 @@ export default [
 	route("media/:key", "routes/media.$key.tsx"),
 	route("s/:token", "routes/s.$token.tsx"),
 	route("usage", "routes/usage.tsx"),
+	route("more", "routes/more.tsx"),
 	route("library", "routes/library.tsx"),
 	route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;

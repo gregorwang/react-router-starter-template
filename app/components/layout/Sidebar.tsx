@@ -37,7 +37,6 @@ interface SidebarProps {
 	activeProjectId?: string;
 	onProjectChange?: (projectId: string) => void;
 	onNewProject?: () => void;
-	isAdmin?: boolean;
 	isOpen?: boolean;
 	isCollapsed?: boolean;
 	onClose?: () => void;
@@ -47,6 +46,7 @@ const CHAT_ROW_HEIGHT = 62;
 const CHAT_OVERSCAN = 8;
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_SEARCH_LIMIT = 30;
+const PROFILE_AVATAR_SRC = "/favicon.ico";
 
 function buildConversationHref(conversationId: string, projectId?: string) {
 	const search = projectId ? `?project=${projectId}` : "";
@@ -67,7 +67,6 @@ export function Sidebar({
 	activeProjectId,
 	onProjectChange,
 	onNewProject,
-	isAdmin = false,
 	isOpen = true,
 	isCollapsed = false,
 	onClose,
@@ -447,7 +446,7 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"chat-sidebar-panel w-72 h-[100dvh] bg-[linear-gradient(165deg,rgba(255,255,255,0.93),rgba(235,246,255,0.84))] dark:bg-neutral-900/70 backdrop-blur-xl border-r border-sky-100/80 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
+				"chat-sidebar-panel w-72 h-[100dvh] bg-[linear-gradient(165deg,rgba(255,255,255,0.93),rgba(235,246,255,0.84))] dark:bg-none dark:bg-neutral-900/70 backdrop-blur-xl border-r border-sky-100/80 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
 				isOpen && "is-open",
 				isCollapsed
 					? "md:w-0 md:opacity-0 md:pointer-events-none md:overflow-hidden md:border-r-0 md:shadow-none"
@@ -671,16 +670,29 @@ export function Sidebar({
 					<span className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
 						聊天
 					</span>
-					<select
-						value={chatFilter}
-						onChange={(e) => setChatFilter(e.target.value as ChatFilter)}
-						className={cn(selectCompactClass, "bg-white/80 dark:bg-neutral-900/70")}
-					>
-						<option value="all">全部</option>
-						<option value="recent">最近</option>
-						<option value="pinned">已置顶</option>
-						<option value="archived">已归档</option>
-					</select>
+					<div className="flex items-center gap-2">
+						<Link
+							to="/conversations"
+							className={cn(
+								"text-xs font-semibold uppercase tracking-[0.16em] rounded-md px-2 py-1 border transition-all duration-200",
+								isActivePath("/conversations")
+									? "border-brand-300/70 bg-brand-50/80 text-brand-600 dark:border-brand-700/70 dark:bg-brand-900/30 dark:text-brand-200"
+									: "border-accent-200/70 bg-accent-50/80 text-accent-700 hover:text-accent-600 hover:border-accent-300/80 dark:border-accent-800/70 dark:bg-accent-950/25 dark:text-accent-200 dark:hover:text-accent-100",
+							)}
+						>
+							all
+						</Link>
+						<select
+							value={chatFilter}
+							onChange={(e) => setChatFilter(e.target.value as ChatFilter)}
+							className={cn(selectCompactClass, "bg-white/80 dark:bg-neutral-900/70")}
+						>
+							<option value="all">全部</option>
+							<option value="recent">最近</option>
+							<option value="pinned">已置顶</option>
+							<option value="archived">已归档</option>
+						</select>
+					</div>
 				</div>
 			</div>
 
@@ -760,74 +772,45 @@ export function Sidebar({
 				)}
 			</nav>
 
-			<div className="p-4 border-t border-white/60 dark:border-neutral-800/70 space-y-3">
-				<div className="flex items-center gap-3 rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 px-3 py-2 bg-white/70 dark:bg-neutral-900/60">
-					<div className="h-8 w-8 rounded-full bg-brand-600 text-white text-xs font-semibold flex items-center justify-center">
-						{(currentUser?.username || "U").slice(0, 1).toUpperCase()}
-					</div>
-					<div className="min-w-0">
-						<div className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 truncate">
-							{currentUser?.username || "User"}
-						</div>
-						<div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-							个人工作区
-						</div>
-					</div>
-				</div>
-
-				<ul className="space-y-2">
-					<li>
+			<div className="p-4 border-t border-white/60 dark:border-neutral-800/70">
+				<div className="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/70 px-3 py-3 bg-white/70 dark:bg-neutral-900/60">
+					<div className="flex items-center justify-between gap-3">
 						<Link
-							to="/conversations"
+							to="/more?tab=usage&range=today"
 							className={cn(
-								"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
-								isActivePath("/conversations")
-									? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
-									: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
+								"group flex h-10 w-10 items-center justify-start gap-2 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-800/80 bg-gradient-to-r from-sky-50/90 to-cyan-50/85 dark:from-sky-950/55 dark:to-cyan-950/45 px-3 text-sky-700 dark:text-sky-200 shadow-sm transition-all duration-300 hover:w-28 hover:shadow-md focus-visible:w-28 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
+								location.pathname === "/more" &&
+									"w-28 border-brand-300/80 dark:border-brand-700/80",
 							)}
+							aria-label="进入设置"
 						>
-							历史聊天记录
+							<span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-700/80 bg-white/90 dark:bg-neutral-900/75">
+								<span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold">
+									{(currentUser?.username || "U").slice(0, 1).toUpperCase()}
+								</span>
+								<img
+									src={PROFILE_AVATAR_SRC}
+									alt=""
+									className="absolute inset-0 h-full w-full object-cover"
+								/>
+							</span>
+							<span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold opacity-0 transition-all duration-200 group-hover:max-w-12 group-hover:opacity-100 group-focus-visible:max-w-12 group-focus-visible:opacity-100">
+								设置
+							</span>
 						</Link>
-					</li>
-					<li>
-						<Link
-							to="/usage"
-							className={cn(
-								"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
-								isActivePath("/usage")
-									? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
-									: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
-							)}
-						>
-							用量
-						</Link>
-					</li>
-					{isAdmin && (
-						<li>
-							<Link
-								to="/admin"
-								className={cn(
-									"block px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
-									isActivePath("/admin")
-										? "bg-brand-50/80 text-brand-700 shadow-sm dark:bg-brand-900/30 dark:text-brand-200"
-										: "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60",
-								)}
-							>
-								管理面板
-							</Link>
-						</li>
-					)}
-					<li>
 						<Form method="post" action="/logout">
 							<button
 								type="submit"
-								className="w-full text-left px-4 py-2 rounded-xl text-sm font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100/70 dark:hover:bg-neutral-800/60 transition-all duration-200"
+								className="group flex h-10 w-10 items-center justify-end gap-2 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-900/70 bg-gradient-to-r from-sky-50/90 to-cyan-50/85 dark:from-sky-950/55 dark:to-cyan-950/45 px-3 text-sky-700 dark:text-sky-200 shadow-sm transition-all duration-300 hover:w-28 hover:shadow-md focus-visible:w-28 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 							>
-								退出登录
+								<span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold opacity-0 transition-all duration-200 group-hover:max-w-12 group-hover:opacity-100 group-focus-visible:max-w-12 group-focus-visible:opacity-100">
+									退出
+								</span>
+								<span className="text-base leading-none">🕊</span>
 							</button>
 						</Form>
-					</li>
-				</ul>
+					</div>
+				</div>
 			</div>
 		</aside>
 	);

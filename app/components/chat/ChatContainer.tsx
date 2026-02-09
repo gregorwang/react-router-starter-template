@@ -360,7 +360,7 @@ export function ChatContainer({
 	return (
 		<div className={cn("flex flex-col flex-1 min-h-0 relative", className)}>
 			{/* Header with Model Selector */}
-			<div className="h-16 border-b border-sky-100/80 dark:border-neutral-800/70 flex items-center px-4 md:px-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(238,247,255,0.86))] dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
+			<div className="h-16 border-b border-sky-100/80 dark:border-neutral-800/70 flex items-center px-4 md:px-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(238,247,255,0.86))] dark:bg-none dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
 				<div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto md:overflow-visible">
 					{onOpenSidebar && (
 						<button
@@ -775,7 +775,7 @@ export function ChatContainer({
 			<div className="flex-1 min-h-0 overflow-hidden">
 				<MessageList />
 			</div>
-			<div className="border-t border-sky-100/80 dark:border-neutral-800/70 p-4 md:p-6 bg-[linear-gradient(0deg,rgba(255,255,255,0.92),rgba(236,246,255,0.82))] dark:bg-neutral-900/60 backdrop-blur-xl">
+			<div className="border-t border-sky-100/80 dark:border-neutral-800/70 p-4 md:p-6 bg-[linear-gradient(0deg,rgba(255,255,255,0.92),rgba(236,246,255,0.82))] dark:bg-none dark:bg-neutral-900/60 backdrop-blur-xl">
 				<InputArea
 					providerAvailable={currentModelAvailable}
 					providerUnavailableMessage={currentUnavailableMessage}

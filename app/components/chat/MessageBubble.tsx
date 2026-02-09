@@ -87,7 +87,7 @@ export function MessageBubble({
 					"min-w-0 max-w-[calc(100%-3rem)] sm:max-w-3xl rounded-2xl px-4 py-4 overflow-visible border transition-shadow duration-200 hover:shadow-md",
 					isUser
 						? "bg-[linear-gradient(155deg,rgba(140,179,255,0.96),rgba(94,134,242,0.94))] text-white border-[#88b0ff]/50 shadow-md shadow-[#719ff6]/30"
-						: "bg-[linear-gradient(150deg,rgba(255,255,255,0.95),rgba(239,247,255,0.9))] dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-sky-100/80 dark:border-neutral-800/60 shadow-sm backdrop-blur",
+						: "bg-[linear-gradient(150deg,rgba(255,255,255,0.95),rgba(239,247,255,0.9))] dark:bg-none dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-sky-100/80 dark:border-neutral-800/60 shadow-sm backdrop-blur",
 				)}
 			>
 				{/* Role Label */}
