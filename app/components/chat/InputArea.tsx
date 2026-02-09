@@ -7,6 +7,8 @@ import type { Attachment } from "../../lib/llm/types";
 import { outlineActionButtonClass } from "../shared/form-styles";
 
 const MAX_INPUT_CHARS = 20000;
+const MIN_TEXTAREA_HEIGHT = 56;
+const MAX_TEXTAREA_HEIGHT = MIN_TEXTAREA_HEIGHT * 2;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 4;
@@ -123,7 +125,13 @@ export function InputArea({
 	useEffect(() => {
 		if (textareaRef.current) {
 			textareaRef.current.style.height = "auto";
-			textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+			const nextHeight = Math.min(
+				Math.max(textareaRef.current.scrollHeight, MIN_TEXTAREA_HEIGHT),
+				MAX_TEXTAREA_HEIGHT,
+			);
+			textareaRef.current.style.height = `${nextHeight}px`;
+			textareaRef.current.style.overflowY =
+				textareaRef.current.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
 		}
 	}, [input]);
 
@@ -334,7 +342,7 @@ export function InputArea({
 					onPaste={handlePaste}
 					placeholder="输入消息..."
 					className={cn(
-						"w-full min-h-[56px] pl-4 py-4 rounded-2xl bg-transparent text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none resize-none overflow-hidden",
+						"w-full min-h-[56px] pl-4 py-4 rounded-2xl bg-transparent text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:outline-none resize-none overflow-y-auto overflow-x-hidden",
 						isStreaming ? "pr-24" : "pr-16",
 					)}
 					rows={1}

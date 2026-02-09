@@ -20,7 +20,7 @@ type ActionData = { ok?: boolean; error?: string; intent?: string };
 export async function loader({ request, context }: Route.LoaderArgs) {
 	if (await getCurrentUser(request, context.db)) {
 		const url = new URL(request.url);
-		const redirectTo = safeRedirect(url.searchParams.get("redirect"), "/conversations");
+		const redirectTo = safeRedirect(url.searchParams.get("redirect"), "/c/new");
 		return redirect(redirectTo);
 	}
 
@@ -35,7 +35,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 	const inviteCode = (formData.get("inviteCode") as string | null)?.trim() || "";
 	const redirectTo = safeRedirect(
 		formData.get("redirectTo")?.toString() ?? null,
-		"/conversations",
+		"/c/new",
 	);
 
 	if (intent === "register") {
@@ -154,7 +154,7 @@ export default function LoginPage() {
 	const [searchParams] = useSearchParams();
 	const actionData = useActionData<ActionData>();
 	const navigation = useNavigation();
-	const redirectTo = searchParams.get("redirect") || "/conversations";
+	const redirectTo = searchParams.get("redirect") || "/c/new";
 	const submitting = navigation.state === "submitting";
 
 	return (

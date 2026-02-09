@@ -5,7 +5,7 @@ import type { Route } from "./+types/index";
 // Server-side redirect - faster than client-side useNavigate
 export async function loader({ request, context }: Route.LoaderArgs) {
 	await requireAuth(request, context.db);
-	return redirect("/conversations");
+	return redirect("/c/new");
 }
 
 // Component won't be rendered due to redirect, but needed for type safety

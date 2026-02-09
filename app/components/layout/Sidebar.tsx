@@ -480,7 +480,7 @@ export function Sidebar({
 						搜索对话
 					</button>
 					<Link
-						to="/conversations"
+						to="/library"
 						className={cn(outlinePanelButtonClass, "text-center")}
 					>
 						库/资料
