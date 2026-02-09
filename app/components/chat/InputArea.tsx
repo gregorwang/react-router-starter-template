@@ -75,6 +75,17 @@ function categoryLabel(category: string) {
 	}
 }
 
+function summaryInactiveReasonLabel(reason?: string) {
+	switch (reason) {
+		case "context_boundary":
+			return "上下文边界已启用";
+		case "missing_summary":
+			return "尚未生成摘要";
+		default:
+			return "未启用";
+	}
+}
+
 function insightToneClass(phase: string, category: string) {
 	if (phase === "success") {
 		return "border-emerald-200/80 dark:border-emerald-700/70 bg-emerald-50/70 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300";
@@ -438,7 +449,10 @@ export function InputArea({
 							上下文 {visibleInsight.payloadMessageCount}/{visibleInsight.contextMessageCount} 条
 						</span>
 						<span className="px-2 py-0.5 rounded-full border border-current/20">
-							摘要 {visibleInsight.summaryActive ? "开启" : "关闭"}
+							摘要{" "}
+							{visibleInsight.summaryActive
+								? "开启"
+								: `关闭（${summaryInactiveReasonLabel(visibleInsight.summaryInactiveReason)}）`}
 						</span>
 						{visibleInsight.trimmed && (
 							<span className="px-2 py-0.5 rounded-full border border-current/20">

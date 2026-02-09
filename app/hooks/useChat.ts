@@ -30,6 +30,11 @@ export type ChatRequestPhase =
 	| "error"
 	| "aborted";
 
+export type SummaryInactiveReason =
+	| "none"
+	| "missing_summary"
+	| "context_boundary";
+
 export interface ChatRequestInsight {
 	id: string;
 	phase: ChatRequestPhase;
@@ -44,6 +49,7 @@ export interface ChatRequestInsight {
 	contextMessageCount: number;
 	payloadMessageCount: number;
 	summaryActive: boolean;
+	summaryInactiveReason: SummaryInactiveReason;
 	summaryMessageCount: number;
 	trimmed: boolean;
 	outputTokens?: number;
@@ -452,7 +458,12 @@ export function useChat() {
 					provider === "poloai"
 						? (currentConversation.enableTools ?? true)
 						: currentConversation.enableTools;
-				const summaryActive = !hasContextBoundary && Boolean(currentConversation.summary);
+				const summaryInactiveReason: SummaryInactiveReason = hasContextBoundary
+					? "context_boundary"
+					: currentConversation.summary
+						? "none"
+						: "missing_summary";
+				const summaryActive = summaryInactiveReason === "none";
 				const requestInsightId = crypto.randomUUID();
 
 				setRequestInsight({
@@ -466,6 +477,7 @@ export function useChat() {
 					contextMessageCount: rawMessages.length,
 					payloadMessageCount: payloadMessages.length,
 					summaryActive,
+					summaryInactiveReason,
 					summaryMessageCount,
 					trimmed: messagesTrimmed,
 					outputTokens: payloadOutputTokens,
