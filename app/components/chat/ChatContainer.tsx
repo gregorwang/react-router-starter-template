@@ -360,7 +360,7 @@ export function ChatContainer({
 	return (
 		<div className={cn("flex flex-col flex-1 min-h-0 relative", className)}>
 			{/* Header with Model Selector */}
-			<div className="h-16 border-b border-white/60 dark:border-neutral-800/70 flex items-center px-4 md:px-6 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
+			<div className="h-16 border-b border-sky-100/80 dark:border-neutral-800/70 flex items-center px-4 md:px-6 bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(238,247,255,0.86))] dark:bg-neutral-900/70 backdrop-blur-xl sticky top-0 z-20">
 				<div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto md:overflow-visible">
 					{onOpenSidebar && (
 						<button
@@ -727,7 +727,7 @@ export function ChatContainer({
 					type="button"
 					onClick={toggleTheme}
 					aria-label="切换明暗模式"
-					className="ml-3 w-10 h-10 rounded-full border border-white/60 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+					className="ml-3 w-10 h-10 rounded-full border border-sky-100/90 dark:border-neutral-700/70 bg-white/90 dark:bg-neutral-900/70 text-neutral-600 dark:text-neutral-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 				>
 					{theme === "dark" ? (
 						<svg
@@ -775,7 +775,7 @@ export function ChatContainer({
 			<div className="flex-1 min-h-0 overflow-hidden">
 				<MessageList />
 			</div>
-			<div className="border-t border-white/60 dark:border-neutral-800/70 p-4 md:p-6 bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl">
+			<div className="border-t border-sky-100/80 dark:border-neutral-800/70 p-4 md:p-6 bg-[linear-gradient(0deg,rgba(255,255,255,0.92),rgba(236,246,255,0.82))] dark:bg-neutral-900/60 backdrop-blur-xl">
 				<InputArea
 					providerAvailable={currentModelAvailable}
 					providerUnavailableMessage={currentUnavailableMessage}

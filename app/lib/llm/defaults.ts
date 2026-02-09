@@ -1,4 +1,4 @@
 export const POLO_DEFAULT_OUTPUT_TOKENS = 20 * 1024;
 export const POLO_OUTPUT_TOKENS_MIN = 256;
-export const POLO_OUTPUT_TOKENS_MAX = 32768;
+export const POLO_OUTPUT_TOKENS_MAX = 200 * 1024;
 export const POLO_OUTPUT_TOKENS_STEP = 512;

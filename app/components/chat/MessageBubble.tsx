@@ -86,8 +86,8 @@ export function MessageBubble({
 				className={cn(
 					"min-w-0 max-w-[calc(100%-3rem)] sm:max-w-3xl rounded-2xl px-4 py-4 overflow-visible border transition-shadow duration-200 hover:shadow-md",
 					isUser
-						? "bg-brand-600 text-white border-brand-500/30 shadow-md shadow-brand-600/20"
-						: "bg-white/80 dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-white/60 dark:border-neutral-800/60 shadow-sm backdrop-blur",
+						? "bg-[linear-gradient(155deg,rgba(140,179,255,0.96),rgba(94,134,242,0.94))] text-white border-[#88b0ff]/50 shadow-md shadow-[#719ff6]/30"
+						: "bg-[linear-gradient(150deg,rgba(255,255,255,0.95),rgba(239,247,255,0.9))] dark:bg-neutral-900/70 text-neutral-900 dark:text-neutral-100 border-sky-100/80 dark:border-neutral-800/60 shadow-sm backdrop-blur",
 				)}
 			>
 				{/* Role Label */}
@@ -181,7 +181,7 @@ export function MessageBubble({
 										href={src}
 										target="_blank"
 										rel="noopener noreferrer"
-										className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/40 dark:border-neutral-800/60 bg-white/70 dark:bg-neutral-900/60 text-xs text-neutral-700 dark:text-neutral-200 hover:border-brand-400/60"
+										className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-sky-100/80 dark:border-neutral-800/60 bg-white/80 dark:bg-neutral-900/60 text-xs text-neutral-700 dark:text-neutral-200 hover:border-brand-400/60"
 									>
 										<span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-200/70 dark:bg-neutral-700/70">
 											FILE
@@ -197,7 +197,7 @@ export function MessageBubble({
 									key={attachment.id}
 									src={src}
 									alt={attachment.name || "上传图片"}
-									className="w-28 h-28 rounded-xl object-cover border border-white/40 dark:border-neutral-800/60"
+									className="w-28 h-28 rounded-xl object-cover border border-sky-100/80 dark:border-neutral-800/60"
 									loading="lazy"
 								/>
 							);

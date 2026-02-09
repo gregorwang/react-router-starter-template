@@ -90,9 +90,16 @@ export function MessageList() {
 	if (!currentConversation?.messages.length) {
 		return (
 			<div className="flex items-center justify-center h-full px-4">
-				<div className="rounded-2xl border border-white/60 dark:border-neutral-800/70 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl px-6 py-6 shadow-sm text-center">
-					<p className="text-neutral-600 dark:text-neutral-300 text-sm">
-						在下面输入内容开始对话
+				<div className="rounded-2xl border border-sky-100/80 dark:border-neutral-800/70 bg-[linear-gradient(155deg,rgba(255,255,255,0.93),rgba(236,246,255,0.84))] dark:bg-neutral-900/70 backdrop-blur-xl px-6 py-7 shadow-sm text-center">
+					<pre className="text-[11px] leading-4 text-sky-600/80 dark:text-sky-300/80 font-mono select-none">
+{String.raw`      /\_/\
+   .-( o.o )-.
+   |  > ^ <  |
+   |  / | \  |
+   '--\___/--'`}
+					</pre>
+					<p className="mt-3 text-neutral-600 dark:text-neutral-300 text-sm tracking-wide">
+						我们一同迈向明天
 					</p>
 				</div>
 			</div>
@@ -114,7 +121,7 @@ export function MessageList() {
 							key={message.id}
 							className="flex items-center justify-center py-1"
 						>
-							<div className="px-4 py-2 rounded-full border border-dashed border-neutral-300/70 dark:border-neutral-700/70 bg-white/70 dark:bg-neutral-900/60 text-[11px] text-neutral-500 dark:text-neutral-400 tracking-wide">
+							<div className="px-4 py-2 rounded-full border border-dashed border-sky-200/80 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/60 text-[11px] text-neutral-500 dark:text-neutral-400 tracking-wide">
 								—— 上下文已清除（
 								{format(
 									new Date(message.meta?.event?.at ?? message.timestamp),
@@ -144,7 +151,7 @@ export function MessageList() {
 					type="button"
 					onClick={scrollToBottom}
 					aria-label="回到底部"
-					className="absolute bottom-4 right-4 text-xs px-3 py-2 rounded-full border border-white/60 dark:border-neutral-700/70 bg-white/80 dark:bg-neutral-900/80 text-neutral-600 dark:text-neutral-300 shadow-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
+					className="absolute bottom-4 right-4 text-xs px-3 py-2 rounded-full border border-sky-100/80 dark:border-neutral-700/70 bg-white/90 dark:bg-neutral-900/80 text-neutral-600 dark:text-neutral-300 shadow-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
 				>
 					回到底部
 				</button>

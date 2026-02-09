@@ -447,7 +447,7 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"chat-sidebar-panel w-72 h-[100dvh] bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xl border-r border-white/60 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
+				"chat-sidebar-panel w-72 h-[100dvh] bg-[linear-gradient(165deg,rgba(255,255,255,0.93),rgba(235,246,255,0.84))] dark:bg-neutral-900/70 backdrop-blur-xl border-r border-sky-100/80 dark:border-neutral-800/70 shadow-lg shadow-neutral-900/5 flex flex-col transition-[width,transform,opacity] duration-300 ease-out",
 				isOpen && "is-open",
 				isCollapsed
 					? "md:w-0 md:opacity-0 md:pointer-events-none md:overflow-hidden md:border-r-0 md:shadow-none"
@@ -455,7 +455,7 @@ export function Sidebar({
 				className,
 			)}
 		>
-			<div className="p-4 border-b border-white/60 dark:border-neutral-800/70 space-y-3">
+			<div className="p-4 border-b border-sky-100/80 dark:border-neutral-800/70 space-y-3">
 				<div className="flex items-center justify-between md:justify-start gap-3">
 					<Button onClick={onNewChat} className="flex-1">
 						新建对话

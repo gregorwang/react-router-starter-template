@@ -54,7 +54,7 @@ describe("chat-session-state.shared", () => {
 			outputTokens: 999999,
 			thinkingBudget: -10,
 		});
-		expect(patch.outputTokens).toBe(32768);
+		expect(patch.outputTokens).toBe(200 * 1024);
 		expect(patch.thinkingBudget).toBe(1024);
 	});
 
@@ -84,4 +84,3 @@ describe("chat-session-state.shared", () => {
 		expect(next.version).toBe(base.version);
 	});
 });
-

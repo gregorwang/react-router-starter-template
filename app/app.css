@@ -22,17 +22,17 @@
 	--color-brand-950: #172554;
 
 	/* Secondary palette */
-	--color-secondary-50: #f0fdfa;
-	--color-secondary-100: #ccfbf1;
-	--color-secondary-200: #99f6e4;
-	--color-secondary-300: #5eead4;
-	--color-secondary-400: #2dd4bf;
-	--color-secondary-500: #14b8a6;
-	--color-secondary-600: #0d9488;
-	--color-secondary-700: #0f766e;
-	--color-secondary-800: #115e59;
-	--color-secondary-900: #134e4a;
-	--color-secondary-950: #042f2e;
+	--color-secondary-50: #f5f9ff;
+	--color-secondary-100: #e9f2ff;
+	--color-secondary-200: #d6e7ff;
+	--color-secondary-300: #bcd5ff;
+	--color-secondary-400: #9dbdff;
+	--color-secondary-500: #7ea3ff;
+	--color-secondary-600: #5e86f2;
+	--color-secondary-700: #4a6bcc;
+	--color-secondary-800: #3d56a3;
+	--color-secondary-900: #334680;
+	--color-secondary-950: #1f2b52;
 
 	/* Accent palette */
 	--color-accent-50: #fffbeb;
@@ -66,8 +66,13 @@ body {
 	@apply bg-neutral-50 text-neutral-900 font-sans antialiased;
 	color-scheme: light;
 	background-image:
-		radial-gradient(1200px circle at 8% -10%, rgba(59, 130, 246, 0.18), transparent 40%),
-		radial-gradient(900px circle at 90% 0%, rgba(20, 184, 166, 0.14), transparent 45%);
+		radial-gradient(1450px circle at -6% -18%, rgba(193, 219, 255, 0.56), transparent 42%),
+		radial-gradient(980px circle at 92% 2%, rgba(135, 176, 245, 0.24), transparent 47%),
+		linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.92) 0%,
+			rgba(241, 248, 255, 0.82) 100%
+		);
 	background-attachment: fixed;
 }
 
@@ -78,8 +83,8 @@ html.dark {
 html.dark body {
 	@apply bg-neutral-950 text-neutral-100;
 	background-image:
-		radial-gradient(1200px circle at 5% -10%, rgba(59, 130, 246, 0.22), transparent 45%),
-		radial-gradient(900px circle at 90% 0%, rgba(20, 184, 166, 0.2), transparent 50%);
+		radial-gradient(1200px circle at 5% -10%, rgba(78, 128, 218, 0.28), transparent 46%),
+		radial-gradient(900px circle at 90% 0%, rgba(58, 91, 150, 0.24), transparent 52%);
 }
 
 /* Markdown prose styles */
@@ -276,6 +281,18 @@ html.dark body {
 	overflow-x: auto;
 	-webkit-overflow-scrolling: touch;
 	overscroll-behavior-x: contain;
+}
+
+.chat-message-scroll {
+	background-image:
+		radial-gradient(860px circle at 11% 0%, rgba(208, 227, 255, 0.44), transparent 52%),
+		radial-gradient(760px circle at 84% 18%, rgba(167, 200, 248, 0.24), transparent 50%);
+}
+
+html.dark .chat-message-scroll {
+	background-image:
+		radial-gradient(860px circle at 11% 0%, rgba(84, 125, 199, 0.2), transparent 52%),
+		radial-gradient(760px circle at 84% 18%, rgba(60, 90, 144, 0.18), transparent 50%);
 }
 
 .prose pre,
