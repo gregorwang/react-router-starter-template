@@ -51,6 +51,8 @@ export interface ChatRequestInsight {
 	summaryActive: boolean;
 	summaryInactiveReason: SummaryInactiveReason;
 	summaryMessageCount: number;
+	serverSummaryInjected?: boolean;
+	serverRequestMessageCount?: number;
 	trimmed: boolean;
 	outputTokens?: number;
 	httpStatus?: number;
@@ -193,6 +195,7 @@ export function useChat() {
 	const AUTO_COMPACT_MESSAGE_THRESHOLD = 24;
 	const AUTO_COMPACT_TOKEN_THRESHOLD = 12000;
 	const AUTO_COMPACT_MIN_NEW_MESSAGES = 6;
+	const SUMMARY_CONTEXT_OVERLAP_MESSAGES = 4;
 	const MAX_PAYLOAD_CHARS = 100000;
 	const MIN_CONTEXT_MESSAGES = 2;
 	const AUTO_TITLE_MAX_CHARS = 2000;
@@ -428,8 +431,12 @@ export function useChat() {
 
 				if (!hasContextBoundary && currentConversation.summary) {
 					const startIndex = Math.min(summaryMessageCount, rawMessages.length);
-					payloadMessages = rawPayloadMessages.slice(startIndex);
-					messagesTrimmed = startIndex > 0;
+					const overlapStartIndex = Math.max(
+						0,
+						startIndex - SUMMARY_CONTEXT_OVERLAP_MESSAGES,
+					);
+					payloadMessages = rawPayloadMessages.slice(overlapStartIndex);
+					messagesTrimmed = overlapStartIndex > 0;
 				}
 
 				if (estimateMessageChars(payloadMessages) > MAX_PAYLOAD_CHARS) {
@@ -526,6 +533,21 @@ export function useChat() {
 						detail: message,
 					});
 				}
+				const serverSummaryInjected = response.headers.get("X-Chat-Summary-Injected");
+				const serverRequestMessageCount = response.headers.get(
+					"X-Chat-Request-Message-Count",
+				);
+				setRequestInsight((prev) => {
+					if (!prev || prev.id !== requestInsightId) return prev;
+					return {
+						...prev,
+						serverSummaryInjected: serverSummaryInjected === "1",
+						serverRequestMessageCount:
+							serverRequestMessageCount && Number.isFinite(Number(serverRequestMessageCount))
+								? Number(serverRequestMessageCount)
+								: undefined,
+					};
+				});
 
 				if (!response.body) {
 					throw new ChatSendError("No response body received", {

@@ -204,6 +204,11 @@ export async function action({ request, context }: Route.ActionArgs) {
 			promptTokenBudget: CHAT_PROMPT_TOKEN_BUDGET,
 			minContextMessages: CHAT_MIN_CONTEXT_MESSAGES,
 		});
+		const summaryInjected = requestMessages.some(
+			(message) =>
+				message.role === "system" &&
+				message.content.startsWith("以下是对话摘要（用于继续上下文，不要逐字引用）："),
+		);
 
 		const lastMessage = messages[messages.length - 1];
 		let storedAttachments: Attachment[] | undefined;
@@ -266,6 +271,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 				"Cache-Control": "no-store, no-cache, no-transform",
 				"Connection": "keep-alive",
 				"X-Accel-Buffering": "no",
+				"X-Chat-Summary-Injected": summaryInjected ? "1" : "0",
+				"X-Chat-Request-Message-Count": String(requestMessages.length),
 			},
 		});
 	} catch (error) {

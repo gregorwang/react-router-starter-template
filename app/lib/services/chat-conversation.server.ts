@@ -6,6 +6,7 @@ import {
 import { ensureDefaultProject, getProject } from "../db/projects.server";
 
 const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
+const SUMMARY_CONTEXT_OVERLAP_MESSAGES = 4;
 
 export async function resolveConversationForChat(options: {
 	db: D1Database;
@@ -91,13 +92,14 @@ export function buildRequestMessages(options: {
 				options.summaryMessageCount ?? 0,
 				options.messages.length,
 			);
-			trimmed =
+			const startIndex =
 				summaryMessageCount > 0
-					? options.messages.slice(summaryMessageCount)
-					: options.messages;
+					? Math.max(0, summaryMessageCount - SUMMARY_CONTEXT_OVERLAP_MESSAGES)
+					: 0;
+			trimmed = options.messages.slice(startIndex);
 		}
 		if (trimmed.length === 0 && options.messages.length > 0) {
-			trimmed = options.messages.slice(-6);
+			trimmed = options.messages.slice(-Math.max(1, options.minContextMessages));
 		}
 		summaryMessage = {
 			role: "system",

@@ -454,6 +454,23 @@ export function InputArea({
 								? "开启"
 								: `关闭（${summaryInactiveReasonLabel(visibleInsight.summaryInactiveReason)}）`}
 						</span>
+						{typeof visibleInsight.serverSummaryInjected === "boolean" && (
+							<span className="px-2 py-0.5 rounded-full border border-current/20">
+								服务端摘要
+								{visibleInsight.serverSummaryInjected ? "已注入" : "未注入"}
+							</span>
+						)}
+						{visibleInsight.summaryActive &&
+							visibleInsight.summaryMessageCount > 0 && (
+								<span className="px-2 py-0.5 rounded-full border border-current/20">
+									摘要覆盖 {visibleInsight.summaryMessageCount} 条
+								</span>
+							)}
+						{typeof visibleInsight.serverRequestMessageCount === "number" && (
+							<span className="px-2 py-0.5 rounded-full border border-current/20">
+								服务端请求 {visibleInsight.serverRequestMessageCount} 条
+							</span>
+						)}
 						{visibleInsight.trimmed && (
 							<span className="px-2 py-0.5 rounded-full border border-current/20">
 								已裁剪
