@@ -8,6 +8,10 @@ import {
 	type ConversationSessionPatch,
 	type ConversationSessionState,
 } from "../app/lib/services/chat-session-state.shared";
+import {
+	isChatSummaryQueueJob,
+	processChatSummaryQueueJob,
+} from "../app/lib/services/chat-summary-queue.server";
 
 declare module "react-router" {
 	export interface AppLoadContext {
@@ -114,6 +118,21 @@ export default {
 			cloudflare: { env, ctx },
 			db: env.DB,
 		});
+	},
+	async queue(batch, env) {
+		setD1LogFlag(env);
+		await ensureDatabase(env);
+		for (const message of batch.messages) {
+			if (!isChatSummaryQueueJob(message.body)) {
+				console.warn("[chat-summary-queue] skip invalid payload");
+				continue;
+			}
+			await processChatSummaryQueueJob({
+				env,
+				db: env.DB,
+				job: message.body,
+			});
+		}
 	},
 } satisfies ExportedHandler<Env>;
 

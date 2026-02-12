@@ -50,6 +50,19 @@
 			"binding": "CHAT_MEDIA"
 		}
 	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "CHAT_SUMMARY_QUEUE",
+				"queue": "chat-summary"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "chat-summary"
+			}
+		]
+	},
 	"durable_objects": {
 		"bindings": [
 			{

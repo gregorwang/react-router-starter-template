@@ -9,10 +9,16 @@ import {
 import { estimateUsage } from "./chat-action-guards.server";
 import { collectSSEChatResult } from "./chat-stream.server";
 import type { ConversationSessionState } from "./chat-session-state.shared";
+import {
+	createChatSummaryQueueJob,
+	enqueueChatSummaryQueueJob,
+	type ChatSummaryQueueJob,
+} from "./chat-summary-queue.server";
 
 export async function persistChatResult(options: {
 	db: D1Database;
 	kv?: KVNamespace;
+	summaryQueue?: Queue<ChatSummaryQueueJob>;
 	userId: string;
 	conversationId: string;
 	provider: LLMProvider;
@@ -106,5 +112,18 @@ export async function persistChatResult(options: {
 			invalidateConversationCaches(options.kv, options.userId, conversation.projectId),
 			invalidateUsageStatsCache(options.kv, options.userId),
 		]);
+	}
+
+	try {
+		await enqueueChatSummaryQueueJob(
+			options.summaryQueue,
+			createChatSummaryQueueJob({
+				userId: options.userId,
+				conversationId: options.conversationId,
+				assistantMessageId: options.assistantMessageId,
+			}),
+		);
+	} catch (error) {
+		console.error("[chat-summary-queue] failed to enqueue summary job", error);
 	}
 }

@@ -251,6 +251,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 			persistChatResult({
 				db: context.db,
 				kv: context.cloudflare.env.SETTINGS_KV,
+				summaryQueue: context.cloudflare.env.CHAT_SUMMARY_QUEUE,
 				userId: user.id,
 				conversationId,
 				provider: sessionState.provider,
