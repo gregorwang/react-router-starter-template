@@ -115,6 +115,12 @@ export interface MessageMeta {
 	usage?: Usage;
 	credits?: number;
 	reasoning?: string;
+	truncated?: {
+		content?: boolean;
+		reasoning?: boolean;
+		originalContentChars?: number;
+		originalReasoningChars?: number;
+	};
 	thinkingMs?: number;
 	attachments?: Attachment[];
 	webSearch?: {

@@ -15,6 +15,27 @@ import {
 	type ChatSummaryQueueJob,
 } from "./chat-summary-queue.server";
 
+const MAX_ASSISTANT_CONTENT_CHARS = 500_000;
+const MAX_ASSISTANT_REASONING_CHARS = 200_000;
+
+type TruncatedText = {
+	value: string;
+	truncated: boolean;
+	originalChars: number;
+};
+
+export function truncateTextForStorage(input: string, maxChars: number): TruncatedText {
+	const originalChars = input.length;
+	if (originalChars <= maxChars) {
+		return { value: input, truncated: false, originalChars };
+	}
+	return {
+		value: input.slice(0, maxChars),
+		truncated: true,
+		originalChars,
+	};
+}
+
 export async function persistChatResult(options: {
 	db: D1Database;
 	kv?: KVNamespace;
@@ -33,6 +54,8 @@ export async function persistChatResult(options: {
 }) {
 	const streamResult = await collectSSEChatResult(options.saveStream);
 	const { fullContent, reasoning, credits, thinkingMs, searchMeta } = streamResult;
+	const storedContent = truncateTextForStorage(fullContent, MAX_ASSISTANT_CONTENT_CHARS);
+	const storedReasoning = truncateTextForStorage(reasoning, MAX_ASSISTANT_REASONING_CHARS);
 	let { usage } = streamResult;
 	if (!usage) {
 		usage = estimateUsage(options.requestMessages, fullContent);
@@ -64,14 +87,27 @@ export async function persistChatResult(options: {
 	const assistantMessage = {
 		id: options.assistantMessageId,
 		role: "assistant" as const,
-		content: fullContent,
+		content: storedContent.value,
 		timestamp: Date.now(),
 		meta: {
 			model: options.model,
 			provider: options.provider,
 			usage,
 			credits,
-			reasoning: reasoning || undefined,
+			reasoning: storedReasoning.value || undefined,
+			truncated:
+				storedContent.truncated || storedReasoning.truncated
+					? {
+							content: storedContent.truncated || undefined,
+							reasoning: storedReasoning.truncated || undefined,
+							originalContentChars: storedContent.truncated
+								? storedContent.originalChars
+								: undefined,
+							originalReasoningChars: storedReasoning.truncated
+								? storedReasoning.originalChars
+								: undefined,
+						}
+					: undefined,
 			thinkingMs,
 			webSearch: searchMeta,
 		},
