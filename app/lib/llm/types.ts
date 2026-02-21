@@ -171,6 +171,7 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 	poloai: [
 		"claude-opus-4-6",
 		"claude-opus-4-5-20251101-thinking",
+		"claude-sonnet-4-6-thinking",
 		"claude-sonnet-4-5-20250929-thinking",
 		"claude-sonnet-4-5-20250929",
 		"claude-haiku-4-5-20251001-thinking",
