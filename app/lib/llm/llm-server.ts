@@ -11,7 +11,7 @@ interface LLMStreamEvent {
 	content?: string;
 	usage?: Usage;
 	credits?: number;
-	meta?: { thinkingMs?: number };
+	meta?: { thinkingMs?: number; stopReason?: string };
 	search?: {
 		provider: "x" | "xai" | "claude";
 		query?: string;
@@ -152,6 +152,7 @@ async function streamDeepSeekServer(
 	apiKey: string,
 	writeEvent: (event: LLMStreamEvent) => Promise<void>,
 ): Promise<void> {
+	const emitStopReason = createStopReasonEmitter(writeEvent);
 	const response = await fetch("https://api.deepseek.com/chat/completions", {
 		method: "POST",
 		headers: {
@@ -177,6 +178,7 @@ async function streamDeepSeekServer(
 		const reasoning =
 			delta?.reasoning_content || delta?.reasoning || delta?.thinking || "";
 		const usage = normalizeUsage(parsed.usage);
+		await emitStopReason(extractOpenAIStopReason(parsed));
 
 		if (content) {
 			await writeEvent({ type: "delta", content });
@@ -197,6 +199,7 @@ async function streamXAIServer(
 	writeEvent: (event: LLMStreamEvent) => Promise<void>,
 	options?: { webSearch?: boolean; xaiSearchMode?: XAISearchMode },
 ): Promise<void> {
+	const emitStopReason = createStopReasonEmitter(writeEvent);
 	const useResponsesApi = true;
 	const searchEnabled = options?.webSearch === true;
 	const searchMode = normalizeXAISearchMode(options?.xaiSearchMode);
@@ -278,6 +281,7 @@ async function streamXAIServer(
 				const usage = normalizeUsage(data?.usage ?? data?.response?.usage);
 				const credits = data?.credits ?? data?.usage?.credits;
 				const citations = extractXAICitations(data?.response ?? data);
+				await emitStopReason(extractXAIStopReason(data));
 
 				if (citations?.length) {
 					await writeEvent({
@@ -307,6 +311,7 @@ async function streamXAIServer(
 				}
 
 				if (eventType === "response.completed" && parsed.response) {
+					await emitStopReason(extractXAIStopReason(parsed));
 					const citations = extractXAICitations(parsed.response);
 					if (citations?.length) {
 						await writeEvent({
@@ -333,6 +338,7 @@ async function streamXAIServer(
 					sawDelta = true;
 					await writeEvent({ type: "delta", content: legacyDelta });
 				}
+				await emitStopReason(extractXAIStopReason(parsed));
 
 				const legacyUsage = normalizeUsage(parsed?.usage);
 				if (legacyUsage) {
@@ -410,6 +416,7 @@ async function streamXAIServer(
 		const content = delta?.content;
 		const usage = normalizeUsage(parsed.usage);
 		const credits = parsed.credits ?? parsed.usage?.credits;
+		await emitStopReason(extractXAIStopReason(parsed));
 
 		if (content) {
 			await writeEvent({ type: "delta", content });
@@ -644,6 +651,7 @@ async function streamPoeServer(
 		webSearch?: boolean;
 	},
 ): Promise<void> {
+	const emitStopReason = createStopReasonEmitter(writeEvent);
 	const response = await fetch("https://api.poe.com/v1/chat/completions", {
 		method: "POST",
 		headers: {
@@ -687,6 +695,7 @@ async function streamPoeServer(
 		const content = delta?.content;
 		const usage = normalizeUsage(parsed.usage);
 		const credits = parsed.credits ?? parsed.usage?.credits;
+		await emitStopReason(extractOpenAIStopReason(parsed));
 
 		if (content) {
 			await writeEvent({ type: "delta", content });
@@ -880,6 +889,7 @@ async function streamArkServer(
 	writeEvent: (event: LLMStreamEvent) => Promise<void>,
 	options?: { enableThinking?: boolean; outputTokens?: number },
 ): Promise<void> {
+	const emitStopReason = createStopReasonEmitter(writeEvent);
 	const rawOutputTokens =
 		typeof options?.outputTokens === "number" ? options.outputTokens : 2048;
 	const maxTokens = Math.min(32768, Math.max(256, Math.floor(rawOutputTokens)));
@@ -919,6 +929,7 @@ async function streamArkServer(
 		const data = (await response.json()) as any;
 		const content = extractOpenAIContent(data);
 		const usage = normalizeUsage(data?.usage);
+		await emitStopReason(extractOpenAIStopReason(data));
 		if (content) {
 			await writeEvent({ type: "delta", content });
 		}
@@ -932,6 +943,7 @@ async function streamArkServer(
 		if (parsed?.error?.message) {
 			throw new Error(parsed.error.message);
 		}
+		await emitStopReason(extractOpenAIStopReason(parsed));
 		const content = extractOpenAIDelta(parsed);
 		const usage = normalizeUsage(parsed?.usage);
 		if (content) {
@@ -1084,6 +1096,54 @@ function extractPoloAIContent(payload: any): string | undefined {
 	}
 
 	return undefined;
+}
+
+function normalizeStopReason(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	return trimmed ? trimmed : undefined;
+}
+
+function createStopReasonEmitter(
+	writeEvent: (event: LLMStreamEvent) => Promise<void>,
+) {
+	let lastReason: string | undefined;
+	return async (reason: unknown) => {
+		const normalized = normalizeStopReason(reason);
+		if (!normalized || normalized === lastReason) return;
+		lastReason = normalized;
+		await writeEvent({ type: "meta", meta: { stopReason: normalized } });
+	};
+}
+
+function extractOpenAIStopReason(payload: any): string | undefined {
+	return normalizeStopReason(
+		payload?.choices?.[0]?.finish_reason ??
+			payload?.choices?.[0]?.stop_reason ??
+			payload?.finish_reason ??
+			payload?.stop_reason,
+	);
+}
+
+function extractXAIStopReason(payload: any): string | undefined {
+	const response = payload?.response ?? payload;
+	return normalizeStopReason(
+		response?.stop_reason ??
+			response?.finish_reason ??
+			response?.status_details?.reason ??
+			payload?.stop_reason ??
+			payload?.finish_reason ??
+			payload?.choices?.[0]?.finish_reason,
+	);
+}
+
+function extractPoloAIStopReason(payload: any): string | undefined {
+	return normalizeStopReason(
+		payload?.stop_reason ??
+			payload?.message?.stop_reason ??
+			payload?.delta?.stop_reason ??
+			payload?.content_block?.stop_reason,
+	);
 }
 
 function extractPoloAIReasoning(payload: any): string | undefined {
@@ -1795,6 +1855,7 @@ async function runPoloAIStreamRequest(options: {
 	localToolNames: Set<string>;
 	writeEvent: (event: LLMStreamEvent) => Promise<void>;
 }): Promise<{ toolUses: PoloAIToolUse[]; searchMeta?: LLMStreamEvent["search"] }> {
+	const emitStopReason = createStopReasonEmitter(options.writeEvent);
 	const headers: Record<string, string> = {
 		Accept: "application/json",
 		"Content-Type": "application/json",
@@ -1824,6 +1885,7 @@ async function runPoloAIStreamRequest(options: {
 		const data = (await response.json()) as any;
 		const blocks = parseClaudeContentBlocks(data);
 		const searchMeta = extractClaudeSearchFromBlocks(blocks);
+		await emitStopReason(extractPoloAIStopReason(data));
 
 		const toolUses = blocks
 			.filter((block) => block?.type === "tool_use")
@@ -1864,6 +1926,10 @@ async function runPoloAIStreamRequest(options: {
 		if (parsed?.error?.message) {
 			throw new Error(parsed.error.message);
 		}
+		await emitStopReason(
+			extractPoloAIStopReason(parsed) ??
+				(parsed?.type === "message_stop" ? "message_stop" : undefined),
+		);
 
 		if (parsed?.type === "content_block_start") {
 			const block = parsed.content_block;

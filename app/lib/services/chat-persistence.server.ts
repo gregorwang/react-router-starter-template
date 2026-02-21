@@ -53,7 +53,8 @@ export async function persistChatResult(options: {
 	saveStream: ReadableStream<Uint8Array>;
 }) {
 	const streamResult = await collectSSEChatResult(options.saveStream);
-	const { fullContent, reasoning, credits, thinkingMs, searchMeta } = streamResult;
+	const { fullContent, reasoning, credits, thinkingMs, stopReason, searchMeta } =
+		streamResult;
 	const storedContent = truncateTextForStorage(fullContent, MAX_ASSISTANT_CONTENT_CHARS);
 	const storedReasoning = truncateTextForStorage(reasoning, MAX_ASSISTANT_REASONING_CHARS);
 	let { usage } = streamResult;
@@ -109,6 +110,7 @@ export async function persistChatResult(options: {
 						}
 					: undefined,
 			thinkingMs,
+			stopReason,
 			webSearch: searchMeta,
 		},
 	};

@@ -614,6 +614,9 @@ export function useChat() {
 						if (parsed.meta.thinkingMs) {
 							meta.thinkingMs = parsed.meta.thinkingMs;
 						}
+						if (typeof parsed.meta.stopReason === "string" && parsed.meta.stopReason.trim()) {
+							meta.stopReason = parsed.meta.stopReason.trim();
+						}
 						updateMsg({ content: fullContent, meta: { ...meta } });
 					}
 

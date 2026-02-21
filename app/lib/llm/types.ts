@@ -122,6 +122,7 @@ export interface MessageMeta {
 		originalReasoningChars?: number;
 	};
 	thinkingMs?: number;
+	stopReason?: string;
 	attachments?: Attachment[];
 	webSearch?: {
 		provider: "x" | "xai" | "claude";

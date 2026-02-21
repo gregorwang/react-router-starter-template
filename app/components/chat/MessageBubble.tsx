@@ -220,7 +220,7 @@ export function MessageBubble({
 				) : (
 					<MarkdownRenderer content={normalizedContent} />
 				)}
-				{(formattedThinking || usage || message.meta?.credits) && (
+				{(formattedThinking || usage || message.meta?.credits || message.meta?.stopReason) && (
 					<div className="mt-2 flex flex-wrap gap-4 text-xs text-neutral-600 dark:text-neutral-300">
 						{formattedThinking && <span>思考用时：{formattedThinking}</span>}
 						{usage && (
@@ -232,6 +232,9 @@ export function MessageBubble({
 						)}
 						{message.meta?.credits && (
 							<span>Poe 积分：{message.meta.credits}</span>
+						)}
+						{message.meta?.stopReason && (
+							<span>结束原因：{message.meta.stopReason}</span>
 						)}
 					</div>
 				)}

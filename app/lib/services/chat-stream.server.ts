@@ -7,6 +7,7 @@ export type ChatStreamResult = {
 	usage?: Usage;
 	credits?: number;
 	thinkingMs?: number;
+	stopReason?: string;
 	searchMeta?: MessageMeta["webSearch"];
 };
 
@@ -18,6 +19,7 @@ export async function collectSSEChatResult(
 	let usage: Usage | undefined;
 	let credits: number | undefined;
 	let thinkingMs: number | undefined;
+	let stopReason: string | undefined;
 	let searchMeta: MessageMeta["webSearch"] | undefined;
 
 	await consumeSSE(stream, ({ data }) => {
@@ -31,7 +33,7 @@ export async function collectSSEChatResult(
 				content?: string;
 				usage?: Usage;
 				credits?: number;
-				meta?: { thinkingMs?: number };
+				meta?: { thinkingMs?: number; stopReason?: string };
 				search?: MessageMeta["webSearch"];
 			};
 			if (parsed.type === "delta" && parsed.content) {
@@ -49,6 +51,13 @@ export async function collectSSEChatResult(
 			if (parsed.type === "meta" && parsed.meta?.thinkingMs) {
 				thinkingMs = parsed.meta.thinkingMs;
 			}
+			if (
+				parsed.type === "meta" &&
+				typeof parsed.meta?.stopReason === "string" &&
+				parsed.meta.stopReason.trim()
+			) {
+				stopReason = parsed.meta.stopReason.trim();
+			}
 			if (parsed.type === "search" && parsed.search) {
 				searchMeta = parsed.search;
 			}
@@ -64,6 +73,7 @@ export async function collectSSEChatResult(
 		usage,
 		credits,
 		thinkingMs,
+		stopReason,
 		searchMeta,
 	};
 }
