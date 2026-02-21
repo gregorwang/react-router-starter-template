@@ -753,38 +753,82 @@ async function streamPoloAIServer(
 			? options.outputTokens
 			: POLO_DEFAULT_OUTPUT_TOKENS;
 	const outputTokens = Math.max(POLO_OUTPUT_TOKENS_MIN, Math.floor(rawOutputTokens));
-	const maxTokens = enableThinking ? thinkingBudget + outputTokens : outputTokens;
-	const extraBody = model.startsWith("claude-opus")
-		? { output_effort: options?.outputEffort ?? "max" }
-		: undefined;
+	const thinkingConfig = buildPoloAIThinkingConfig({
+		model,
+		enableThinking,
+		thinkingBudget,
+	});
+	const maxTokens =
+		thinkingConfig?.type === "enabled"
+			? thinkingBudget + outputTokens
+			: outputTokens;
+	const outputEffort = normalizePoloAIOutputEffort(model, options?.outputEffort);
+	const outputConfig = outputEffort ? { effort: outputEffort } : undefined;
 	const formattedMessages = buildPoloAIMessages(messages);
 	const localToolsEnabled = options?.enableTools ?? true;
-	const toolBundle = buildPoloAITools({ webSearch, enableTools: localToolsEnabled });
+	let toolBundle = buildPoloAITools({
+		model,
+		webSearch,
+		enableTools: localToolsEnabled,
+	});
 	const toolChoice = toolBundle.tools.length > 0 ? { type: "auto" } : undefined;
-
-	const baseBody = {
+	let baseBody: Record<string, unknown> = {
 		model,
 		stream: true,
 		max_tokens: maxTokens,
-		...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
-		...(extraBody ? { extra_body: extraBody } : {}),
+		...(thinkingConfig ? { thinking: thinkingConfig } : {}),
+		...(outputConfig ? { output_config: outputConfig } : {}),
 		...(toolBundle.tools.length > 0
 			? { tools: toolBundle.tools, tool_choice: toolChoice }
 			: {}),
-	} as Record<string, unknown>;
+	};
 
 	let currentMessages = formattedMessages;
 	let rounds = 0;
 	let aggregatedSearch: LLMStreamEvent["search"] | undefined;
+	let retriedLegacyWebSearchTool = false;
 
 	while (true) {
-		const result = await runPoloAIStreamRequest({
-			apiKey,
-			messages: currentMessages,
-			baseBody,
-			localToolNames: toolBundle.localToolNames,
-			writeEvent,
-		});
+		let result: Awaited<ReturnType<typeof runPoloAIStreamRequest>>;
+		try {
+			result = await runPoloAIStreamRequest({
+				apiKey,
+				messages: currentMessages,
+				baseBody,
+				localToolNames: toolBundle.localToolNames,
+				writeEvent,
+			});
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (
+				webSearch &&
+				!retriedLegacyWebSearchTool &&
+				shouldRetryWithLegacyPoloAIWebSearchTool(message)
+			) {
+				retriedLegacyWebSearchTool = true;
+				toolBundle = buildPoloAITools({
+					model,
+					webSearch,
+					enableTools: localToolsEnabled,
+					forceLegacyWebSearchTool: true,
+				});
+				baseBody = {
+					...baseBody,
+					...(toolBundle.tools.length > 0
+						? { tools: toolBundle.tools, tool_choice: toolChoice }
+						: {}),
+				};
+				result = await runPoloAIStreamRequest({
+					apiKey,
+					messages: currentMessages,
+					baseBody,
+					localToolNames: toolBundle.localToolNames,
+					writeEvent,
+				});
+			} else {
+				throw error;
+			}
+		}
 
 		aggregatedSearch = mergeSearchMeta(aggregatedSearch, result.searchMeta);
 		if (aggregatedSearch) {
@@ -1211,6 +1255,87 @@ function evaluateMathExpression(expression: string): number {
 }
 
 const POLOAI_WEB_SEARCH_TOOL_NAME = "web_search";
+const POLOAI_WEB_SEARCH_TOOL_LEGACY_TYPE = "web_search_20250305";
+const POLOAI_WEB_SEARCH_TOOL_LATEST_TYPE = "web_search_20260209";
+const POLOAI_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
+type OutputEffort = "low" | "medium" | "high" | "max";
+
+function supportsPoloAIOutputEffort(model: string) {
+	return (
+		model.startsWith("claude-opus-4-6") ||
+		model.startsWith("claude-opus-4-5") ||
+		model.startsWith("claude-sonnet-4-6")
+	);
+}
+
+function supportsPoloAIMaxOutputEffort(model: string) {
+	return model.startsWith("claude-opus-4-6");
+}
+
+function supportsPoloAIAdaptiveThinking(model: string) {
+	return model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6");
+}
+
+function normalizePoloAIOutputEffort(
+	model: string,
+	effort?: OutputEffort,
+): OutputEffort | undefined {
+	if (!supportsPoloAIOutputEffort(model)) return undefined;
+	const defaultEffort: OutputEffort = supportsPoloAIMaxOutputEffort(model)
+		? "max"
+		: "high";
+	const resolved = effort ?? defaultEffort;
+	if (resolved === "max" && !supportsPoloAIMaxOutputEffort(model)) {
+		return "high";
+	}
+	return resolved;
+}
+
+function buildPoloAIThinkingConfig(options: {
+	model: string;
+	enableThinking: boolean;
+	thinkingBudget: number;
+}) {
+	if (!options.enableThinking) return undefined;
+	if (supportsPoloAIAdaptiveThinking(options.model)) {
+		return { type: "adaptive" as const };
+	}
+	return { type: "enabled" as const, budget_tokens: options.thinkingBudget };
+}
+
+function selectPoloAIWebSearchToolType(model: string) {
+	if (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6")) {
+		return POLOAI_WEB_SEARCH_TOOL_LATEST_TYPE;
+	}
+	return POLOAI_WEB_SEARCH_TOOL_LEGACY_TYPE;
+}
+
+function shouldRetryWithLegacyPoloAIWebSearchTool(message: string) {
+	const lowered = message.toLowerCase();
+	return (
+		lowered.includes(POLOAI_WEB_SEARCH_TOOL_LATEST_TYPE) ||
+		(lowered.includes("web_search") &&
+			(lowered.includes("invalid") ||
+				lowered.includes("unsupported") ||
+				lowered.includes("unknown"))) ||
+		(lowered.includes("code_execution") && lowered.includes("web_search"))
+	);
+}
+
+function shouldEnablePoloAIInterleavedThinkingBeta(body: Record<string, unknown>) {
+	const model =
+		typeof body.model === "string"
+			? body.model
+			: "";
+	const thinking = body.thinking as { type?: string } | undefined;
+	const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
+	return (
+		hasTools &&
+		Boolean(thinking) &&
+		(thinking?.type === "enabled" || thinking?.type === "adaptive") &&
+		(model.startsWith("claude-opus-4") || model.startsWith("claude-sonnet-4"))
+	);
+}
 
 const POLOAI_LOCAL_TOOLS = [
 	{
@@ -1279,14 +1404,23 @@ const POLOAI_LOCAL_TOOLS = [
 ];
 
 function buildPoloAITools(options: {
+	model: string;
 	webSearch: boolean;
 	enableTools: boolean;
-}): { tools: Array<Record<string, unknown>>; localToolNames: Set<string> } {
+	forceLegacyWebSearchTool?: boolean;
+}): {
+	tools: Array<Record<string, unknown>>;
+	localToolNames: Set<string>;
+	webSearchToolType?: string;
+} {
 	const tools: Array<Record<string, unknown>> = [];
 	const localToolNames = new Set<string>();
+	const webSearchToolType = options.forceLegacyWebSearchTool
+		? POLOAI_WEB_SEARCH_TOOL_LEGACY_TYPE
+		: selectPoloAIWebSearchToolType(options.model);
 
 	if (options.webSearch) {
-		tools.push({ type: "web_search_20250305", name: POLOAI_WEB_SEARCH_TOOL_NAME });
+		tools.push({ type: webSearchToolType, name: POLOAI_WEB_SEARCH_TOOL_NAME });
 		// Some vendors proxy Claude server tools as plain tool_use events; enable local fallback execution.
 		localToolNames.add(POLOAI_WEB_SEARCH_TOOL_NAME);
 	}
@@ -1302,7 +1436,11 @@ function buildPoloAITools(options: {
 		}
 	}
 
-	return { tools, localToolNames };
+	return {
+		tools,
+		localToolNames,
+		webSearchToolType: options.webSearch ? webSearchToolType : undefined,
+	};
 }
 
 function buildPoloAIMessages(messages: LLMMessage[]) {
@@ -1423,7 +1561,12 @@ function resolveWebSearchQuery(input: unknown) {
 	const object = input as Record<string, unknown>;
 	const candidates = [
 		object.query,
+		object.q,
 		object.search_query,
+		object.searchTerm,
+		object.search_term,
+		object.searchText,
+		object.search_text,
 		object.keyword,
 		object.keywords,
 	];
@@ -1652,13 +1795,19 @@ async function runPoloAIStreamRequest(options: {
 	localToolNames: Set<string>;
 	writeEvent: (event: LLMStreamEvent) => Promise<void>;
 }): Promise<{ toolUses: PoloAIToolUse[]; searchMeta?: LLMStreamEvent["search"] }> {
+	const headers: Record<string, string> = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		Authorization: options.apiKey,
+		"anthropic-version": "2023-06-01",
+	};
+	if (shouldEnablePoloAIInterleavedThinkingBeta(options.baseBody)) {
+		headers["anthropic-beta"] = POLOAI_INTERLEAVED_THINKING_BETA;
+	}
+
 	const response = await fetch("https://poloai.top/v1/messages", {
 		method: "POST",
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/json",
-			Authorization: options.apiKey,
-		},
+		headers,
 		body: JSON.stringify({
 			...options.baseBody,
 			messages: options.messages,

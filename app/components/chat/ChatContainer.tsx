@@ -51,6 +51,29 @@ type SessionStatePayload = {
 	enableTools?: boolean;
 };
 
+type OutputEffort = "low" | "medium" | "high" | "max";
+
+function supportsPoloOutputEffort(model: string) {
+	return (
+		model.startsWith("claude-opus-4-6") ||
+		model.startsWith("claude-opus-4-5") ||
+		model.startsWith("claude-sonnet-4-6")
+	);
+}
+
+function supportsPoloMaxOutputEffort(model: string) {
+	return model.startsWith("claude-opus-4-6");
+}
+
+function normalizePoloOutputEffort(model: string, effort?: OutputEffort): OutputEffort {
+	const defaultEffort: OutputEffort = supportsPoloMaxOutputEffort(model) ? "max" : "high";
+	const resolved = effort ?? defaultEffort;
+	if (resolved === "max" && !supportsPoloMaxOutputEffort(model)) {
+		return "high";
+	}
+	return resolved;
+}
+
 export function ChatContainer({
 	className,
 	onOpenSidebar,
@@ -120,10 +143,15 @@ export function ChatContainer({
 		if (!currentConversation) return;
 		const [provider, model] = e.target.value.split(":");
 		const nextProvider = provider as LLMProvider;
+		const nextOutputEffort =
+			nextProvider === "poloai" && supportsPoloOutputEffort(model)
+				? normalizePoloOutputEffort(model, currentConversation.outputEffort)
+				: currentConversation.outputEffort;
 		setCurrentConversation({
 			...currentConversation,
 			provider: nextProvider,
 			model: model,
+			outputEffort: nextOutputEffort,
 			xaiSearchMode:
 				nextProvider === "xai" ? (currentConversation.xaiSearchMode ?? "x") : undefined,
 		});
@@ -628,10 +656,13 @@ export function ChatContainer({
 					)}
 
 					{currentConversation?.provider === "poloai" &&
-						currentConversation.model.startsWith("claude-opus") && (
+						supportsPoloOutputEffort(currentConversation.model) && (
 							<select
 								className={cn(selectCompactClass, "cursor-pointer ml-2 text-neutral-600 dark:text-neutral-300")}
-								value={currentConversation.outputEffort || "max"}
+								value={normalizePoloOutputEffort(
+									currentConversation.model,
+									currentConversation.outputEffort,
+								)}
 								onChange={(e) =>
 									setCurrentConversation({
 										...currentConversation,
@@ -646,7 +677,9 @@ export function ChatContainer({
 								<option value="low">输出强度：低</option>
 								<option value="medium">输出强度：中</option>
 								<option value="high">输出强度：高</option>
-								<option value="max">输出强度：最大</option>
+								{supportsPoloMaxOutputEffort(currentConversation.model) && (
+									<option value="max">输出强度：最大</option>
+								)}
 							</select>
 						)}
 
