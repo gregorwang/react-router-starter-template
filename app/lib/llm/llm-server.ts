@@ -1141,8 +1141,12 @@ function extractPoloAIStopReason(payload: any): string | undefined {
 	return normalizeStopReason(
 		payload?.stop_reason ??
 			payload?.message?.stop_reason ??
+			payload?.message?.delta?.stop_reason ??
 			payload?.delta?.stop_reason ??
-			payload?.content_block?.stop_reason,
+			payload?.content_block?.stop_reason ??
+			payload?.choices?.[0]?.finish_reason ??
+			payload?.choices?.[0]?.stop_reason ??
+			payload?.finish_reason,
 	);
 }
 
@@ -1926,6 +1930,9 @@ async function runPoloAIStreamRequest(options: {
 		if (parsed?.error?.message) {
 			throw new Error(parsed.error.message);
 		}
+		let wroteTextDelta = false;
+		let wroteReasoningDelta = false;
+		let wroteUsage = false;
 		await emitStopReason(
 			extractPoloAIStopReason(parsed) ??
 				(parsed?.type === "message_stop" ? "message_stop" : undefined),
@@ -1943,9 +1950,11 @@ async function runPoloAIStreamRequest(options: {
 			}
 			if (block?.type === "text" && typeof block.text === "string") {
 				await options.writeEvent({ type: "delta", content: block.text });
+				wroteTextDelta = true;
 			}
 			if (block?.type === "thinking" && typeof block.thinking === "string") {
 				await options.writeEvent({ type: "reasoning", content: block.thinking });
+				wroteReasoningDelta = true;
 			}
 			if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
 				for (const item of block.content) {
@@ -1975,9 +1984,11 @@ async function runPoloAIStreamRequest(options: {
 			const delta = parsed.delta;
 			if (delta?.type === "text_delta" && typeof delta.text === "string") {
 				await options.writeEvent({ type: "delta", content: delta.text });
+				wroteTextDelta = true;
 			}
 			if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
 				await options.writeEvent({ type: "reasoning", content: delta.thinking });
+				wroteReasoningDelta = true;
 			}
 			if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
 				const entry = toolUsesByIndex.get(parsed.index);
@@ -2013,6 +2024,27 @@ async function runPoloAIStreamRequest(options: {
 			const usage = normalizeUsage(parsed?.usage);
 			if (usage) {
 				await options.writeEvent({ type: "usage", usage });
+				wroteUsage = true;
+			}
+		}
+
+		// PoloAI may proxy some Claude models as OpenAI-style SSE chunks.
+		if (!wroteTextDelta) {
+			const fallbackContent = extractPoloAIContent(parsed);
+			if (typeof fallbackContent === "string" && fallbackContent.length > 0) {
+				await options.writeEvent({ type: "delta", content: fallbackContent });
+			}
+		}
+		if (!wroteReasoningDelta) {
+			const fallbackReasoning = extractPoloAIReasoning(parsed);
+			if (typeof fallbackReasoning === "string" && fallbackReasoning.length > 0) {
+				await options.writeEvent({ type: "reasoning", content: fallbackReasoning });
+			}
+		}
+		if (!wroteUsage) {
+			const fallbackUsage = normalizeUsage(parsed?.usage ?? parsed?.message?.usage);
+			if (fallbackUsage) {
+				await options.writeEvent({ type: "usage", usage: fallbackUsage });
 			}
 		}
 	});
