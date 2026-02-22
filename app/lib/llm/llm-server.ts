@@ -1028,6 +1028,9 @@ function extractXAICitations(payload: any): string[] | undefined {
 async function processSSEStream(
 	response: Response,
 	onParsed: (parsed: any) => Promise<void>,
+	options?: {
+		onParseError?: (payload: string, error: unknown) => void | Promise<void>;
+	},
 ): Promise<void> {
 	if (!response.body) {
 		throw new Error("No response body received");
@@ -1035,6 +1038,9 @@ async function processSSEStream(
 
 	await consumeSSEJson(response.body, onParsed, {
 		onParseError: (payload, error) => {
+			if (options?.onParseError) {
+				return options.onParseError(payload, error);
+			}
 			console.error(
 				"[LLM Server] Stream parse error:",
 				error,
@@ -1043,6 +1049,13 @@ async function processSSEStream(
 			);
 		},
 	});
+}
+
+function normalizePoloAIPlainTextChunk(payload: string): string | undefined {
+	const trimmed = payload.trim();
+	if (!trimmed || trimmed === "[DONE]") return undefined;
+	if (trimmed.startsWith("{") || trimmed.startsWith("[")) return undefined;
+	return trimmed;
 }
 
 function normalizeUsage(usage: any): Usage | undefined {
@@ -1081,6 +1094,24 @@ function extractPoloAIContent(payload: any): string | undefined {
 	if (typeof openAIDelta === "string") {
 		return openAIDelta;
 	}
+	if (Array.isArray(openAIDelta)) {
+		const text = openAIDelta
+			.map((entry: any) =>
+				typeof entry === "string"
+					? entry
+					: typeof entry?.text === "string"
+						? entry.text
+						: typeof entry?.content === "string"
+							? entry.content
+							: typeof entry?.delta?.text === "string"
+								? entry.delta.text
+								: "",
+			)
+			.join("");
+		if (text) {
+			return text;
+		}
+	}
 
 	const messageContent = choice?.message?.content;
 	if (typeof messageContent === "string") {
@@ -1093,6 +1124,38 @@ function extractPoloAIContent(payload: any): string | undefined {
 			.map((block: any) => (typeof block?.text === "string" ? block.text : ""))
 			.join("");
 		return text || undefined;
+	}
+
+	const responseText =
+		payload?.response?.output_text?.delta ??
+		payload?.response?.output_text ??
+		payload?.output_text?.delta ??
+		payload?.output_text;
+	if (typeof responseText === "string") {
+		return responseText;
+	}
+
+	const responseOutputBlocks = payload?.response?.output ?? payload?.output;
+	if (Array.isArray(responseOutputBlocks)) {
+		const text = responseOutputBlocks
+			.flatMap((entry: any) =>
+				Array.isArray(entry?.content)
+					? entry.content
+					: Array.isArray(entry?.message?.content)
+						? entry.message.content
+						: [],
+			)
+			.map((block: any) =>
+				typeof block?.text === "string"
+					? block.text
+					: typeof block?.content === "string"
+						? block.content
+						: "",
+			)
+			.join("");
+		if (text) {
+			return text;
+		}
 	}
 
 	return undefined;
@@ -2047,6 +2110,13 @@ async function runPoloAIStreamRequest(options: {
 				await options.writeEvent({ type: "usage", usage: fallbackUsage });
 			}
 		}
+	}, {
+		onParseError: async (payload) => {
+			const chunk = normalizePoloAIPlainTextChunk(payload);
+			if (chunk) {
+				await options.writeEvent({ type: "delta", content: chunk });
+			}
+		},
 	});
 
 	for (const entry of toolUsesByIndex.values()) {
