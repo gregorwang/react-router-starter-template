@@ -11,9 +11,12 @@ import { collectSSEChatResult } from "./chat-stream.server";
 import type { ConversationSessionState } from "./chat-session-state.shared";
 import {
 	createChatSummaryQueueJob,
-	enqueueChatSummaryQueueJob,
-	type ChatSummaryQueueJob,
 } from "./chat-summary-queue.server";
+import {
+	enqueueChatQueueJob,
+	type ChatQueueJob,
+	createChatEmbeddingQueueJob,
+} from "./chat-queue-types";
 
 const MAX_ASSISTANT_CONTENT_CHARS = 500_000;
 const MAX_ASSISTANT_REASONING_CHARS = 200_000;
@@ -39,7 +42,7 @@ export function truncateTextForStorage(input: string, maxChars: number): Truncat
 export async function persistChatResult(options: {
 	db: D1Database;
 	kv?: KVNamespace;
-	summaryQueue?: Queue<ChatSummaryQueueJob>;
+	summaryQueue?: Queue<ChatQueueJob>;
 	userId: string;
 	conversationId: string;
 	provider: LLMProvider;
@@ -153,15 +156,22 @@ export async function persistChatResult(options: {
 	}
 
 	try {
-		await enqueueChatSummaryQueueJob(
-			options.summaryQueue,
-			createChatSummaryQueueJob({
-				userId: options.userId,
-				conversationId: options.conversationId,
-				assistantMessageId: options.assistantMessageId,
-			}),
-		);
+		const summaryJob = createChatSummaryQueueJob({
+			userId: options.userId,
+			conversationId: options.conversationId,
+			assistantMessageId: options.assistantMessageId,
+		});
+		const embeddingJob = createChatEmbeddingQueueJob({
+			userId: options.userId,
+			conversationId: options.conversationId,
+			assistantMessageId: options.assistantMessageId,
+		});
+
+		await Promise.all([
+			enqueueChatQueueJob(options.summaryQueue, summaryJob),
+			enqueueChatQueueJob(options.summaryQueue, embeddingJob),
+		]);
 	} catch (error) {
-		console.error("[chat-summary-queue] failed to enqueue summary job", error);
+		console.error("[chat-queue] failed to enqueue background jobs", error);
 	}
 }

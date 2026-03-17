@@ -1,5 +1,5 @@
 import { createRequestHandler } from "react-router";
-import { initDatabase } from "../app/lib/db/conversations.server";
+import { initDatabase, getConversation } from "../app/lib/db/conversations.server";
 import {
 	bootstrapStateToPersistedState,
 	mergeConversationSessionState,
@@ -12,6 +12,11 @@ import {
 	isChatSummaryQueueJob,
 	processChatSummaryQueueJob,
 } from "../app/lib/services/chat-summary-queue.server";
+import { isChatQueueJob, type ChatQueueJob } from "../app/lib/services/chat-queue-types";
+import {
+	createEpisodicMemoryEntry,
+	upsertEpisodicMemory,
+} from "../app/lib/memory/episodic-memory.server";
 
 declare module "react-router" {
 	export interface AppLoadContext {
@@ -123,18 +128,106 @@ export default {
 		setD1LogFlag(env);
 		await ensureDatabase(env);
 		for (const message of batch.messages) {
-			if (!isChatSummaryQueueJob(message.body)) {
-				console.warn("[chat-summary-queue] skip invalid payload");
+			const job = message.body as unknown;
+
+			// Unified routing: try new discriminated union first
+			if (isChatQueueJob(job)) {
+				await processQueueJob(env, job);
 				continue;
 			}
-			await processChatSummaryQueueJob({
-				env,
-				db: env.DB,
-				job: message.body,
-			});
+
+			// Backward compat: legacy format (if any)
+			if (isChatSummaryQueueJob(job)) {
+				await processChatSummaryQueueJob({ env, db: env.DB, job });
+				continue;
+			}
+
+			console.warn("[chat-queue] skip unknown payload", typeof job);
 		}
 	},
 } satisfies ExportedHandler<Env>;
+
+// ---------------------------------------------------------------------------
+// Queue job router
+// ---------------------------------------------------------------------------
+
+async function processQueueJob(env: Env, job: ChatQueueJob): Promise<void> {
+	switch (job.type) {
+		case "chat_summary":
+			await processChatSummaryQueueJob({ env, db: env.DB, job });
+			break;
+
+		case "chat_embedding":
+			await processEmbeddingJob(env, job);
+			break;
+
+		case "chat_memory_extraction":
+			// TODO(P5): implement structured memory extraction
+			console.log("[chat-queue] memory extraction job received (no-op)", job.conversationId);
+			break;
+
+		default:
+			console.warn("[chat-queue] unknown job type", (job as { type: string }).type);
+	}
+}
+
+async function processEmbeddingJob(
+	env: Env,
+	job: { userId: string; conversationId: string; assistantMessageId: string },
+): Promise<void> {
+	if (!env.AI || !env.VECTORIZE) {
+		console.log("[chat-queue] embedding skipped: AI or VECTORIZE not configured");
+		return;
+	}
+
+	const conversation = await getConversation(env.DB, job.userId, job.conversationId);
+	if (!conversation) {
+		console.warn("[chat-queue] embedding skipped: conversation not found");
+		return;
+	}
+
+	// Find the assistant message and the preceding user message
+	const assistantMsg = conversation.messages.find(
+		(m) => m.id === job.assistantMessageId && m.role === "assistant",
+	);
+	if (!assistantMsg) {
+		console.warn("[chat-queue] embedding skipped: assistant message not found");
+		return;
+	}
+
+	// Get the user message that came right before the assistant response
+	const assistantIdx = conversation.messages.indexOf(assistantMsg);
+	const userMsg = assistantIdx > 0
+		? conversation.messages[assistantIdx - 1]
+		: null;
+
+	// Upsert both messages into Vectorize
+	const messagesToEmbed = [
+		...(userMsg && userMsg.role === "user" ? [userMsg] : []),
+		assistantMsg,
+	];
+
+	for (const msg of messagesToEmbed) {
+		try {
+			const entry = createEpisodicMemoryEntry({
+				conversationId: job.conversationId,
+				userId: job.userId,
+				messageId: msg.id,
+				role: msg.role as "user" | "assistant",
+				content: msg.content,
+				timestamp: msg.timestamp,
+			});
+			await upsertEpisodicMemory({
+				vectorize: env.VECTORIZE,
+				ai: env.AI,
+				entry,
+				embeddingModel: env.EMBEDDING_MODEL,
+			});
+		} catch (error) {
+			console.error(`[chat-queue] embedding failed for message ${msg.id}`, error);
+		}
+	}
+}
 
 function readBooleanEnv(env: Env, key: string, defaultValue = false): boolean {
 	const raw = (env as unknown as Record<string, unknown>)[key];

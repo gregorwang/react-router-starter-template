@@ -70,4 +70,24 @@ describe("buildRequestMessages", () => {
 		expect(result[0].content[0]).toBe("b");
 		expect(result[1].content[0]).toBe("c");
 	});
+
+	it("respects promptTokenBudget on the model-aware path", () => {
+		const messages: LLMMessage[] = [
+			{ role: "user", content: "a".repeat(1000) },
+			{ role: "assistant", content: "b".repeat(1000) },
+			{ role: "user", content: "c".repeat(1000) },
+		];
+
+		const result = buildRequestMessages({
+			messages,
+			model: "grok-4-1-fast-reasoning",
+			promptTokenBudget: 100,
+			minContextMessages: 2,
+		});
+
+		expect(result[0].role).toBe("system");
+		expect(result.slice(1).length).toBe(2);
+		expect(result[1].content[0]).toBe("b");
+		expect(result[2].content[0]).toBe("c");
+	});
 });

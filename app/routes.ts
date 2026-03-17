@@ -19,6 +19,7 @@ export default [
 	route("projects/create", "routes/projects.create.ts"),
 	route("projects/update", "routes/projects.update.ts"),
 	route("projects/delete", "routes/projects.delete.ts"),
+	route("memory", "routes/memory.ts"),
 	route("c/:id", "routes/c_.$id.tsx"),
 	route("chat/action", "routes/chat.action.ts"),
 	route("media/:key", "routes/media.$key.tsx"),

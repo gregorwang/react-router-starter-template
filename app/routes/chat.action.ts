@@ -1,6 +1,11 @@
 import type { Route } from "./+types/chat.action";
 import { streamLLMFromServer } from "../lib/llm/llm-server";
 import type { Attachment } from "../lib/llm/types";
+import { searchEpisodicMemory } from "../lib/memory/episodic-memory.server";
+import {
+	getActiveMemoryItems,
+	formatMemoryItemsForPrompt,
+} from "../lib/db/memory-items.server";
 import { getUserModelLimit } from "../lib/db/user-model-limits.server";
 import { countModelCallsSince } from "../lib/db/user-usage.server";
 import { requireAuth } from "../lib/auth.server";
@@ -196,6 +201,41 @@ export async function action({ request, context }: Route.ActionArgs) {
 			sessionState,
 		);
 
+		// L3: Episodic memory — retrieve semantically similar past snippets
+		let retrievedChunks: string[] | undefined;
+		const lastUserMessage = [...messages].reverse().find(
+			(message) => message.role === "user",
+		);
+		if (context.cloudflare.env.VECTORIZE && context.cloudflare.env.AI && lastUserMessage) {
+			try {
+				const results = await searchEpisodicMemory({
+					vectorize: context.cloudflare.env.VECTORIZE,
+					ai: context.cloudflare.env.AI,
+					query: lastUserMessage.content,
+					userId: user.id,
+					topK: 5,
+					excludeConversationId: conversationId,
+					embeddingModel: context.cloudflare.env.EMBEDDING_MODEL,
+				});
+				if (results.length > 0) {
+					retrievedChunks = results.map((r) => r.snippet);
+				}
+			} catch (error) {
+				console.error("[chat.action] episodic memory search failed", error);
+			}
+		}
+
+		// L2: Structured memory — load user preferences, facts, constraints
+		let structuredMemories: string[] | undefined;
+		try {
+			const memoryItems = await getActiveMemoryItems(context.db, user.id, 30);
+			if (memoryItems.length > 0) {
+				structuredMemories = formatMemoryItemsForPrompt(memoryItems);
+			}
+		} catch (error) {
+			console.error("[chat.action] structured memory load failed", error);
+		}
+
 		const requestMessages = buildRequestMessages({
 			messages,
 			messagesTrimmed,
@@ -203,11 +243,15 @@ export async function action({ request, context }: Route.ActionArgs) {
 			summaryMessageCount: conversationForRequest.summaryMessageCount,
 			promptTokenBudget: CHAT_PROMPT_TOKEN_BUDGET,
 			minContextMessages: CHAT_MIN_CONTEXT_MESSAGES,
+			model: sessionState.model,
+			retrievedChunks,
+			structuredMemories,
 		});
 		const summaryInjected = requestMessages.some(
 			(message) =>
 				message.role === "system" &&
-				message.content.startsWith("以下是对话摘要（用于继续上下文，不要逐字引用）："),
+				(message.content.startsWith("以下是对话摘要（用于继续上下文，不要逐字引用）：") ||
+				 message.content.startsWith("【对话摘要】")),
 		);
 
 		const lastMessage = messages[messages.length - 1];

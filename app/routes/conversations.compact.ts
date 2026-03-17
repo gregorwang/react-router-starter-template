@@ -134,15 +134,16 @@ export async function action({ request, context }: Route.ActionArgs) {
 		});
 	}
 
-	const summary = await summarizeConversation({
+	const summaryResult = await summarizeConversation({
 		env,
 		baseSummary,
 		messages: newMessages.length ? newMessages : compactMessages,
 	});
 
-	if (!summary) {
+	if (!summaryResult) {
 		return new Response("Failed to generate summary", { status: 500 });
 	}
+	const summary = summaryResult.summary;
 
 	const summaryMessageCount = compactMessages.length;
 	await updateConversationSummary(

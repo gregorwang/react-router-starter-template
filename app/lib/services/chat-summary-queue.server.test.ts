@@ -13,6 +13,8 @@ const {
 	resolveConversationSessionStateMock,
 	applyConversationSessionStateMock,
 	invalidateConversationCachesMock,
+	getSummaryVersionMock,
+	saveSummaryVersionMock,
 } = vi.hoisted(() => ({
 	getConversationMock: vi.fn(),
 	updateConversationSummaryMock: vi.fn(),
@@ -20,6 +22,8 @@ const {
 	resolveConversationSessionStateMock: vi.fn(),
 	applyConversationSessionStateMock: vi.fn(),
 	invalidateConversationCachesMock: vi.fn(),
+	getSummaryVersionMock: vi.fn(),
+	saveSummaryVersionMock: vi.fn(),
 }));
 
 vi.mock("../db/conversations.server", () => ({
@@ -38,6 +42,11 @@ vi.mock("./chat-session-state.server", () => ({
 
 vi.mock("../cache/conversation-index.server", () => ({
 	invalidateConversationCaches: invalidateConversationCachesMock,
+}));
+
+vi.mock("../db/summary-versions.server", () => ({
+	getSummaryVersion: getSummaryVersionMock,
+	saveSummaryVersion: saveSummaryVersionMock,
 }));
 
 function buildConversation(overrides: Partial<Conversation> = {}): Conversation {
@@ -60,6 +69,8 @@ describe("chat-summary-queue.server", () => {
 		vi.clearAllMocks();
 		resolveConversationSessionStateMock.mockResolvedValue({});
 		applyConversationSessionStateMock.mockImplementation((conversation) => conversation);
+		getSummaryVersionMock.mockResolvedValue(0);
+		saveSummaryVersionMock.mockResolvedValue(undefined);
 	});
 
 	it("creates and validates queue jobs", () => {
@@ -122,7 +133,7 @@ describe("chat-summary-queue.server", () => {
 				],
 			}),
 		);
-		summarizeConversationMock.mockResolvedValue("next summary");
+		summarizeConversationMock.mockResolvedValue({ summary: "next summary", changeDescription: "added new turns" });
 
 		const result = await processChatSummaryQueueJob({
 			env: {} as Env,

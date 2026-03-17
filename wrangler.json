@@ -63,6 +63,12 @@
 			}
 		]
 	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "chat-memory"
+		}
+	],
 	"durable_objects": {
 		"bindings": [
 			{

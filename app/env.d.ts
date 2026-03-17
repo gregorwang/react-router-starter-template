@@ -11,6 +11,7 @@ declare global {
 		CHAT_RATE_LIMITER_DO?: DurableObjectNamespace;
 		CHAT_SESSION_DO?: DurableObjectNamespace;
 		CHAT_SUMMARY_QUEUE?: Queue;
+		VECTORIZE?: VectorizeIndex;
 		DEEPSEEK_API_KEY?: string;
 		XAI_API_KEY?: string;
 		POE_API_KEY?: string;
@@ -24,6 +25,7 @@ declare global {
 		SUMMARY_MODEL?: string;
 		TITLE_PROVIDER?: string;
 		TITLE_MODEL?: string;
+		EMBEDDING_MODEL?: string;
 		D1_LOG?: string;
 	}
 }

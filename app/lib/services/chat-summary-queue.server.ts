@@ -2,6 +2,7 @@ import { getMessagesInActiveContext, isChatTurnMessage } from "../chat/context-b
 import { invalidateConversationCaches } from "../cache/conversation-index.server";
 import { getConversation, updateConversationSummary } from "../db/conversations.server";
 import { summarizeConversation } from "../llm/summary.server";
+import { getSummaryVersion, saveSummaryVersion } from "../db/summary-versions.server";
 import {
 	applyConversationSessionState,
 	resolveConversationSessionState,
@@ -120,17 +121,20 @@ export async function processChatSummaryQueueJob(options: {
 		return { status: "up_to_date" };
 	}
 
-	const summary = await summarizeConversation({
+	const currentVersion = await getSummaryVersion(db, job.conversationId);
+	const summaryResult = await summarizeConversation({
 		env,
 		baseSummary,
 		messages: newMessages.length > 0 ? newMessages : compactMessages,
+		version: currentVersion,
 	});
-	const normalizedSummary = summary?.trim() || "";
+	const normalizedSummary = summaryResult?.summary?.trim() || "";
 	if (!normalizedSummary) {
 		return { status: "summary_empty" };
 	}
 
 	const now = Date.now();
+	const nextVersion = currentVersion + 1;
 	const nextSummaryMessageCount = compactMessages.length;
 	await updateConversationSummary(
 		db,
@@ -140,6 +144,23 @@ export async function processChatSummaryQueueJob(options: {
 		now,
 		nextSummaryMessageCount,
 	);
+
+	// Save version history for drift diagnosis
+	try {
+		await saveSummaryVersion(db, {
+			conversationId: job.conversationId,
+			userId: job.userId,
+			version: nextVersion,
+			summaryText: normalizedSummary,
+			sourceTurnRange: JSON.stringify({
+				from: summaryMessageCount,
+				to: nextSummaryMessageCount,
+			}),
+			changeDescription: summaryResult?.changeDescription,
+		});
+	} catch (error) {
+		console.error("[chat-summary-queue] failed to save summary version", error);
+	}
 	await resolveConversationSessionState({
 		env,
 		userId: job.userId,
