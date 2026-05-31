@@ -754,8 +754,16 @@ async function streamPoloAIServer(
 	const rawThinkingBudget =
 		typeof options?.thinkingBudget === "number" ? options.thinkingBudget : 12288;
 	const thinkingBudget = Math.max(1024, Math.floor(rawThinkingBudget));
-	const extraBody = model.startsWith("claude-opus")
-		? { output_effort: options?.outputEffort ?? "max" }
+	const outputEffort = options?.outputEffort ?? "max";
+	const usesAdaptiveThinking = model.startsWith("claude-opus-4-8");
+	const thinkingConfig = enableThinking
+		? usesAdaptiveThinking
+			? { type: "adaptive" }
+			: { type: "enabled", budget_tokens: thinkingBudget }
+		: undefined;
+	const outputConfig = usesAdaptiveThinking ? { effort: outputEffort } : undefined;
+	const extraBody = model.startsWith("claude-opus") && !usesAdaptiveThinking
+		? { output_effort: outputEffort }
 		: undefined;
 	const formattedMessages = buildPoloAIMessages(messages);
 	const localToolsEnabled = options?.enableTools ?? true;
@@ -765,7 +773,8 @@ async function streamPoloAIServer(
 		model,
 		stream: true,
 		max_tokens: POLO_MAX_TOKENS,
-		...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
+		...(thinkingConfig ? { thinking: thinkingConfig } : {}),
+		...(outputConfig ? { output_config: outputConfig } : {}),
 		...(extraBody ? { extra_body: extraBody } : {}),
 		...(toolBundle.tools.length > 0
 			? { tools: toolBundle.tools, tool_choice: toolChoice }
