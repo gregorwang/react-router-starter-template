@@ -128,7 +128,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 			deepseek: Boolean(env.DEEPSEEK_API_KEY),
 			xai: Boolean(env.XAI_API_KEY),
 			poe: Boolean(env.POE_API_KEY),
-			"workers-ai": false,
+			"workers-ai": Boolean(env.AI),
 			poloai: Boolean(env.POLOAI_API_KEY),
 			ark: Boolean(env.ARK_API_KEY),
 		},

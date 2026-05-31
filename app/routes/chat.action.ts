@@ -6,16 +6,12 @@ import {
 	getActiveMemoryItems,
 	formatMemoryItemsForPrompt,
 } from "../lib/db/memory-items.server";
-import { getUserModelLimit } from "../lib/db/user-model-limits.server";
-import { countModelCallsSince } from "../lib/db/user-usage.server";
 import { requireAuth } from "../lib/auth.server";
 import {
 	CHAT_ACTION_MAX_BODY_BYTES,
 	CHAT_MIN_CONTEXT_MESSAGES,
 	CHAT_PROMPT_TOKEN_BUDGET,
 	type ChatActionData,
-	getMonthStartUtc,
-	getWeekStartUtc,
 	readJsonBodyWithLimit,
 	toUserFacingError,
 	validateChatActionData,
@@ -73,9 +69,9 @@ export async function action({ request, context }: Route.ActionArgs) {
 			enableTools,
 		} = data;
 
-		if (provider === "workers-ai") {
+		if (provider === "workers-ai" && !context.cloudflare.env.AI) {
 			return new Response(
-				JSON.stringify({ error: "Workers AI 暂时不可用。" }),
+				JSON.stringify({ error: "Workers AI binding 未配置。" }),
 				{
 					status: 503,
 					headers: {
@@ -84,67 +80,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 					},
 				},
 			);
-		}
-
-		if (user.role !== "admin") {
-			const limit = await getUserModelLimit(context.db, user.id, provider, model);
-			if (!limit || !limit.enabled) {
-				return new Response(
-					JSON.stringify({ error: "该模型未授权使用。" }),
-					{
-						status: 403,
-						headers: {
-							"Content-Type": "application/json",
-							"Cache-Control": "no-store",
-						},
-					},
-				);
-			}
-
-			const now = Date.now();
-			if (typeof limit.weeklyLimit === "number") {
-				const weekStart = getWeekStartUtc(now);
-				const weekCalls = await countModelCallsSince(context.db, {
-					userId: user.id,
-					provider,
-					model,
-					startMs: weekStart,
-				});
-				if (weekCalls >= limit.weeklyLimit) {
-					return new Response(
-						JSON.stringify({ error: "本周该模型调用次数已用尽。" }),
-						{
-							status: 429,
-							headers: {
-								"Content-Type": "application/json",
-								"Cache-Control": "no-store",
-							},
-						},
-					);
-				}
-			}
-
-			if (typeof limit.monthlyLimit === "number") {
-				const monthStart = getMonthStartUtc(now);
-				const monthCalls = await countModelCallsSince(context.db, {
-					userId: user.id,
-					provider,
-					model,
-					startMs: monthStart,
-				});
-				if (monthCalls >= limit.monthlyLimit) {
-					return new Response(
-						JSON.stringify({ error: "本月该模型调用次数已用尽。" }),
-						{
-							status: 429,
-							headers: {
-								"Content-Type": "application/json",
-								"Cache-Control": "no-store",
-							},
-						},
-					);
-				}
-			}
 		}
 
 		const actorKey = await resolveActorKey(request);

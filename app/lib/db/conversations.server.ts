@@ -1,6 +1,4 @@
 import type { Conversation, Message } from "../llm/types";
-import { hashPassword } from "../auth/password.server";
-import { ensureAdminUser } from "./users.server";
 import { safeJsonParse } from "./safe-json.server";
 
 type D1Meta = {
@@ -832,7 +830,6 @@ export async function initDatabase(
 	options?: InitDatabaseOptions,
 ): Promise<void> {
 	const allowRuntimeMigrations = options?.allowRuntimeMigrations === true;
-	const allowAdminBootstrap = options?.allowAdminBootstrap === true;
 
 	if (allowRuntimeMigrations) {
 		await ensureBaseTables(db);
@@ -842,10 +839,7 @@ export async function initDatabase(
 	}
 
 	await assertRequiredSchema(db);
-
-	if (allowAdminBootstrap) {
-		await runAdminBootstrap(db, env);
-	}
+	void env;
 }
 
 const REQUIRED_SCHEMA_COLUMNS: Record<string, string[]> = {
@@ -872,7 +866,6 @@ const REQUIRED_SCHEMA_COLUMNS: Record<string, string[]> = {
 		"enable_tools",
 	],
 	messages: ["meta"],
-	sessions: ["user_id", "expires_at"],
 	projects: ["user_id", "is_default"],
 	conversation_share_links: [
 		"token",
@@ -881,8 +874,6 @@ const REQUIRED_SCHEMA_COLUMNS: Record<string, string[]> = {
 		"revoked_at",
 		"expires_at",
 	],
-	users: ["id", "username", "password_hash", "role"],
-	invite_codes: ["code", "created_by", "created_at", "expires_at"],
 	user_model_limits: ["user_id", "provider", "model", "enabled", "updated_at"],
 };
 
@@ -936,17 +927,6 @@ async function ensureBaseTables(db: D1Database) {
 
 	await db
 		.prepare(
-			`CREATE TABLE IF NOT EXISTS sessions (
-				id TEXT PRIMARY KEY,
-				user_id TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				expires_at INTEGER NOT NULL
-			)`,
-		)
-		.run();
-
-	await db
-		.prepare(
 			`CREATE TABLE IF NOT EXISTS projects (
 				id TEXT PRIMARY KEY,
 				user_id TEXT NOT NULL,
@@ -971,33 +951,6 @@ async function ensureBaseTables(db: D1Database) {
 				expires_at INTEGER,
 				UNIQUE(user_id, conversation_id),
 				FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-			)`,
-		)
-		.run();
-
-	await db
-		.prepare(
-			`CREATE TABLE IF NOT EXISTS users (
-				id TEXT PRIMARY KEY,
-				username TEXT NOT NULL UNIQUE,
-				password_hash TEXT NOT NULL,
-				role TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				updated_at INTEGER NOT NULL,
-				last_login_at INTEGER
-			)`,
-		)
-		.run();
-
-	await db
-		.prepare(
-			`CREATE TABLE IF NOT EXISTS invite_codes (
-				code TEXT PRIMARY KEY,
-				created_by TEXT NOT NULL,
-				created_at INTEGER NOT NULL,
-				expires_at INTEGER NOT NULL,
-				used_by TEXT,
-				used_at INTEGER
 			)`,
 		)
 		.run();
@@ -1048,8 +1001,6 @@ async function runRuntimeLegacyMigrations(db: D1Database) {
 		"ALTER TABLE conversations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE conversations ADD COLUMN pinned_at INTEGER",
-		"ALTER TABLE sessions ADD COLUMN expires_at INTEGER NOT NULL",
-		"ALTER TABLE sessions ADD COLUMN user_id TEXT",
 		"ALTER TABLE projects ADD COLUMN user_id TEXT",
 		"ALTER TABLE projects ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE conversation_share_links ADD COLUMN revoked_at INTEGER",
@@ -1099,78 +1050,14 @@ async function ensureIndexes(db: D1Database) {
 		"CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)",
 		"CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)",
 		"CREATE INDEX IF NOT EXISTS idx_messages_role_timestamp ON messages(role, timestamp)",
-		"CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)",
-		"CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
 		"CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)",
 		"CREATE INDEX IF NOT EXISTS idx_share_links_conversation_id ON conversation_share_links(conversation_id)",
 		"CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON conversation_share_links(user_id)",
 		"CREATE INDEX IF NOT EXISTS idx_share_links_expires_at ON conversation_share_links(expires_at)",
-		"CREATE INDEX IF NOT EXISTS idx_invite_codes_expires_at ON invite_codes(expires_at)",
-		"CREATE INDEX IF NOT EXISTS idx_invite_codes_used_by ON invite_codes(used_by)",
 	];
 
 	for (const sql of indexStatements) {
 		await db.prepare(sql).run();
-	}
-}
-
-async function runAdminBootstrap(db: D1Database, env?: Env) {
-	const raw = (env ?? {}) as Record<string, unknown>;
-	const adminUsername = resolveString(raw.ADMIN_USERNAME)?.trim() || "admin";
-	const adminPassword =
-		resolveString(raw.ADMIN_PASSWORD)?.trim() ||
-		resolveString(raw.AUTH_PASSWORD)?.trim() ||
-		"";
-	if (!adminPassword) return;
-
-	try {
-		const adminHash = await hashPassword(adminPassword);
-		const adminUser = await ensureAdminUser(db, {
-			username: adminUsername,
-			passwordHash: adminHash,
-		});
-
-		await db
-			.prepare(
-				"UPDATE conversations SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
-			)
-			.bind(adminUser.id)
-			.run();
-
-		await db
-			.prepare(
-				"UPDATE projects SET user_id = ? WHERE user_id IS NULL OR user_id = 'legacy'",
-			)
-			.bind(adminUser.id)
-			.run();
-
-		await db
-			.prepare(
-				"UPDATE projects SET is_default = 1 WHERE id = 'default' AND user_id = ?",
-			)
-			.bind(adminUser.id)
-			.run();
-
-		const { results: defaultResults } = await db
-			.prepare("SELECT id FROM projects WHERE user_id = ? AND is_default = 1 LIMIT 1")
-			.bind(adminUser.id)
-			.all();
-
-		if (!defaultResults || defaultResults.length === 0) {
-			const now = Date.now();
-			const defaultId = `default:${adminUser.id}`;
-			await db
-				.prepare(
-					`INSERT OR IGNORE INTO projects (id, user_id, name, description, is_default, created_at, updated_at)
-					VALUES (?, ?, ?, ?, 1, ?, ?)`,
-				)
-				.bind(defaultId, adminUser.id, "默认项目", "默认工作区", now, now)
-				.run();
-		}
-
-		await db.prepare("DELETE FROM sessions WHERE user_id IS NULL").run();
-	} catch (error) {
-		console.error("[initDatabase] Admin bootstrap failed:", error);
 	}
 }
 
@@ -1182,8 +1069,4 @@ async function ensureLegacyDefaultProject(db: D1Database) {
 		)
 		.bind(Date.now(), Date.now())
 		.run();
-}
-
-function resolveString(value: unknown): string | undefined {
-	return typeof value === "string" ? value : undefined;
 }

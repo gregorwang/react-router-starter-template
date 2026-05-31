@@ -179,9 +179,9 @@ export const PROVIDER_MODELS: Record<LLMProvider, string[]> = {
 	],
 	ark: ["ark-code-latest"],
 	"workers-ai": [
-		"@cf/meta/llama-3.1-8b-instruct",
-		"@cf/meta/llama-3.1-70b-instruct",
-		"@cf/qwen/qwen1.5-7b-chat",
+		"@cf/meta/llama-3.1-8b-instruct-fp8",
+		"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+		"@cf/qwen/qwen1.5-7b-chat-awq",
 	],
 };
 

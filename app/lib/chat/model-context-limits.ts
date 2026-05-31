@@ -40,9 +40,9 @@ const MODEL_CTX_MAX: Record<string, number> = {
 	"ark-code-latest": 32768,
 
 	// Workers AI
-	"@cf/meta/llama-3.1-8b-instruct": 8192,
-	"@cf/meta/llama-3.1-70b-instruct": 8192,
-	"@cf/qwen/qwen1.5-7b-chat": 8192,
+	"@cf/meta/llama-3.1-8b-instruct-fp8": 8192,
+	"@cf/meta/llama-3.3-70b-instruct-fp8-fast": 8192,
+	"@cf/qwen/qwen1.5-7b-chat-awq": 8192,
 };
 
 const DEFAULT_CTX_MAX = 32000;

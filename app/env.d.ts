@@ -18,9 +18,6 @@ declare global {
 		POLOAI_API_KEY?: string;
 		ARK_API_KEY?: string;
 		X_API_BEARER?: string;
-		AUTH_PASSWORD?: string;
-		ADMIN_USERNAME?: string;
-		ADMIN_PASSWORD?: string;
 		SUMMARY_PROVIDER?: string;
 		SUMMARY_MODEL?: string;
 		TITLE_PROVIDER?: string;

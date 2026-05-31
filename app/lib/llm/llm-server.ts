@@ -720,11 +720,12 @@ async function streamWorkersAIServer(
 		throw new Error("Workers AI binding not configured. Add AI binding in wrangler.json.");
 	}
 
-	const prompt = messages
-		.map((message) => `${message.role.toUpperCase()}: ${message.content}`)
-		.join("\n");
-
-	const result = (await env.AI.run(model as any, { prompt } as any)) as {
+	const result = (await env.AI.run(model as any, {
+		messages: messages.map((message) => ({
+			role: message.role,
+			content: message.content,
+		})),
+	} as any)) as {
 		response?: string;
 		usage?: Usage;
 	};

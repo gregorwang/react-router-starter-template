@@ -1,4 +1,4 @@
-import { Form, Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { format } from "date-fns";
 import { Button } from "../shared/Button";
@@ -778,9 +778,9 @@ export function Sidebar({
 						<Link
 							to="/more?tab=usage&range=today"
 							className={cn(
-								"group flex h-10 w-10 items-center justify-start gap-2 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-800/80 bg-gradient-to-r from-sky-50/90 to-cyan-50/85 dark:from-sky-950/55 dark:to-cyan-950/45 px-3 text-sky-700 dark:text-sky-200 shadow-sm transition-all duration-300 hover:w-28 hover:shadow-md focus-visible:w-28 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
+								"group flex h-10 flex-1 items-center justify-start gap-2 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-800/80 bg-gradient-to-r from-sky-50/90 to-cyan-50/85 dark:from-sky-950/55 dark:to-cyan-950/45 px-3 text-sky-700 dark:text-sky-200 shadow-sm transition-all duration-300 hover:shadow-md focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950",
 								location.pathname === "/more" &&
-									"w-28 border-brand-300/80 dark:border-brand-700/80",
+									"border-brand-300/80 dark:border-brand-700/80",
 							)}
 							aria-label="进入设置"
 						>
@@ -794,21 +794,10 @@ export function Sidebar({
 									className="absolute inset-0 h-full w-full object-cover"
 								/>
 							</span>
-							<span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold opacity-0 transition-all duration-200 group-hover:max-w-12 group-hover:opacity-100 group-focus-visible:max-w-12 group-focus-visible:opacity-100">
+							<span className="whitespace-nowrap text-xs font-semibold">
 								设置
 							</span>
 						</Link>
-						<Form method="post" action="/logout">
-							<button
-								type="submit"
-								className="group flex h-10 w-10 items-center justify-end gap-2 overflow-hidden rounded-full border border-sky-200/80 dark:border-sky-900/70 bg-gradient-to-r from-sky-50/90 to-cyan-50/85 dark:from-sky-950/55 dark:to-cyan-950/45 px-3 text-sky-700 dark:text-sky-200 shadow-sm transition-all duration-300 hover:w-28 hover:shadow-md focus-visible:w-28 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-50 dark:focus-visible:ring-offset-neutral-950"
-							>
-								<span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold opacity-0 transition-all duration-200 group-hover:max-w-12 group-hover:opacity-100 group-focus-visible:max-w-12 group-focus-visible:opacity-100">
-									退出
-								</span>
-								<span className="text-base leading-none">🕊</span>
-							</button>
-						</Form>
 					</div>
 				</div>
 			</div>
