@@ -2,8 +2,6 @@ import type { AppLoadContext } from "react-router";
 import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
 import { consumeSSEJson } from "../utils/sse";
 
-const POLO_MAX_TOKENS = 64 * 1024;
-
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
 	content?: string;
@@ -764,7 +762,6 @@ async function streamPoloAIServer(
 	const baseBody = {
 		model,
 		stream: true,
-		max_tokens: POLO_MAX_TOKENS,
 		...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
 		...(extraBody ? { extra_body: extraBody } : {}),
 		...(toolBundle.tools.length > 0
