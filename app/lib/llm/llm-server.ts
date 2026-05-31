@@ -2,7 +2,7 @@ import type { AppLoadContext } from "react-router";
 import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
 import { consumeSSEJson } from "../utils/sse";
 
-const POLO_MAX_TOKENS = 200000;
+const POLO_MAX_TOKENS = 128000;
 
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
