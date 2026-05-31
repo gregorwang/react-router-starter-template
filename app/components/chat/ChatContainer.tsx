@@ -19,12 +19,6 @@ import {
 	getMessagesInActiveContext,
 	isChatTurnMessage,
 } from "../../lib/chat/context-boundary";
-import {
-	POLO_DEFAULT_OUTPUT_TOKENS,
-	POLO_OUTPUT_TOKENS_MAX,
-	POLO_OUTPUT_TOKENS_MIN,
-	POLO_OUTPUT_TOKENS_STEP,
-} from "../../lib/llm/defaults";
 
 interface ChatContainerProps {
 	className?: string;
@@ -44,7 +38,6 @@ type SessionStatePayload = {
 	enableThinking?: boolean;
 	thinkingBudget?: number;
 	thinkingLevel?: "low" | "medium" | "high";
-	outputTokens?: number;
 	outputEffort?: "low" | "medium" | "high" | "max";
 	webSearch?: boolean;
 	xaiSearchMode?: XAISearchMode;
@@ -55,6 +48,8 @@ type OutputEffort = "low" | "medium" | "high" | "max";
 
 function supportsPoloOutputEffort(model: string) {
 	return (
+		model.startsWith("claude-opus-4-8") ||
+		model.startsWith("claude-opus-4-7") ||
 		model.startsWith("claude-opus-4-6") ||
 		model.startsWith("claude-opus-4-5") ||
 		model.startsWith("claude-sonnet-4-6")
@@ -62,7 +57,11 @@ function supportsPoloOutputEffort(model: string) {
 }
 
 function supportsPoloMaxOutputEffort(model: string) {
-	return model.startsWith("claude-opus-4-6");
+	return (
+		model.startsWith("claude-opus-4-8") ||
+		model.startsWith("claude-opus-4-7") ||
+		model.startsWith("claude-opus-4-6")
+	);
 }
 
 function normalizePoloOutputEffort(model: string, effort?: OutputEffort): OutputEffort {
@@ -302,7 +301,6 @@ export function ChatContainer({
 			enableThinking: currentConversation.enableThinking,
 			thinkingBudget: currentConversation.thinkingBudget,
 			thinkingLevel: currentConversation.thinkingLevel,
-			outputTokens: currentConversation.outputTokens,
 			outputEffort: currentConversation.outputEffort,
 			webSearch: currentConversation.webSearch,
 			xaiSearchMode: currentConversation.xaiSearchMode,
@@ -317,7 +315,6 @@ export function ChatContainer({
 		currentConversation?.enableThinking,
 		currentConversation?.thinkingBudget,
 		currentConversation?.thinkingLevel,
-		currentConversation?.outputTokens,
 		currentConversation?.outputEffort,
 		currentConversation?.webSearch,
 		currentConversation?.xaiSearchMode,
@@ -364,7 +361,6 @@ export function ChatContainer({
 							enableThinking: data.state?.enableThinking ?? prev.enableThinking,
 							thinkingBudget: data.state?.thinkingBudget ?? prev.thinkingBudget,
 							thinkingLevel: data.state?.thinkingLevel ?? prev.thinkingLevel,
-							outputTokens: data.state?.outputTokens ?? prev.outputTokens,
 							outputEffort: data.state?.outputEffort ?? prev.outputEffort,
 							webSearch: data.state?.webSearch ?? prev.webSearch,
 							xaiSearchMode: data.state?.xaiSearchMode ?? prev.xaiSearchMode,
@@ -682,42 +678,6 @@ export function ChatContainer({
 								)}
 							</select>
 						)}
-
-					{currentConversation?.provider === "poloai" && (
-						<div className="flex items-center gap-2 ml-2">
-							<span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">
-								输出预算：
-							</span>
-							<input
-								type="range"
-								min={POLO_OUTPUT_TOKENS_MIN}
-								max={POLO_OUTPUT_TOKENS_MAX}
-								step={POLO_OUTPUT_TOKENS_STEP}
-								className="w-24 h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700 accent-brand-600"
-								value={
-									currentConversation.outputTokens ??
-									POLO_DEFAULT_OUTPUT_TOKENS
-								}
-								onChange={(e) =>
-									setCurrentConversation({
-										...currentConversation,
-										outputTokens: parseInt(e.target.value),
-									})
-								}
-								title={`输出预算：${currentConversation.outputTokens ?? POLO_DEFAULT_OUTPUT_TOKENS} tokens`}
-							/>
-							<span className="text-xs text-neutral-500 w-12 text-right">
-								{(() => {
-									const value =
-										currentConversation.outputTokens ??
-										POLO_DEFAULT_OUTPUT_TOKENS;
-									const kValue = value / 1024;
-									const label = kValue.toFixed(1).replace(/\.0$/, "");
-									return `${label}k`;
-								})()}
-							</span>
-						</div>
-					)}
 
 					{currentConversation?.provider === "poloai" && (
 						<label className="flex items-center gap-1.5 ml-2 cursor-pointer select-none">

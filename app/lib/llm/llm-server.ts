@@ -1,10 +1,8 @@
 import type { AppLoadContext } from "react-router";
 import type { LLMMessage, LLMProvider, Usage, XAISearchMode } from "./types";
 import { consumeSSEJson } from "../utils/sse";
-import {
-	POLO_DEFAULT_OUTPUT_TOKENS,
-	POLO_OUTPUT_TOKENS_MIN,
-} from "./defaults";
+
+const POLO_MAX_TOKENS = 64 * 1024;
 
 interface LLMStreamEvent {
 	type: "delta" | "reasoning" | "usage" | "credits" | "meta" | "search" | "error";
@@ -120,7 +118,6 @@ export async function streamLLMFromServer(
 						webSearch: options?.webSearch,
 						enableThinking: options?.enableThinking,
 						thinkingBudget: options?.thinkingBudget,
-						outputTokens: options?.outputTokens,
 						enableTools: options?.enableTools,
 					});
 					break;
@@ -749,7 +746,6 @@ async function streamPoloAIServer(
 		webSearch?: boolean;
 		enableThinking?: boolean;
 		thinkingBudget?: number;
-		outputTokens?: number;
 		enableTools?: boolean;
 	},
 ): Promise<void> {
@@ -758,12 +754,6 @@ async function streamPoloAIServer(
 	const rawThinkingBudget =
 		typeof options?.thinkingBudget === "number" ? options.thinkingBudget : 12288;
 	const thinkingBudget = Math.max(1024, Math.floor(rawThinkingBudget));
-	const rawOutputTokens =
-		typeof options?.outputTokens === "number"
-			? options.outputTokens
-			: POLO_DEFAULT_OUTPUT_TOKENS;
-	const outputTokens = Math.max(POLO_OUTPUT_TOKENS_MIN, Math.floor(rawOutputTokens));
-	const maxTokens = enableThinking ? thinkingBudget + outputTokens : outputTokens;
 	const extraBody = model.startsWith("claude-opus")
 		? { output_effort: options?.outputEffort ?? "max" }
 		: undefined;
@@ -774,7 +764,7 @@ async function streamPoloAIServer(
 	const baseBody = {
 		model,
 		stream: true,
-		max_tokens: maxTokens,
+		max_tokens: POLO_MAX_TOKENS,
 		...(enableThinking ? { thinking: { type: "enabled", budget_tokens: thinkingBudget } } : {}),
 		...(extraBody ? { extra_body: extraBody } : {}),
 		...(toolBundle.tools.length > 0

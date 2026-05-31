@@ -9,6 +9,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"limits": {
+		"cpu_ms": 300000
+	},
 	"upload_source_maps": true,
 	"ai": {
 		"binding": "AI"

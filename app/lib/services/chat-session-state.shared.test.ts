@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Conversation } from "../llm/types";
 import {
-	DEFAULT_OUTPUT_TOKENS,
 	buildConversationSessionBootstrap,
 	bootstrapStateToPersistedState,
 	mergeConversationSessionState,
@@ -35,7 +34,7 @@ describe("chat-session-state.shared", () => {
 		expect(bootstrap.xaiSearchMode).toBe("x");
 	});
 
-	it("applies provider defaults for poloai output settings", () => {
+	it("applies provider defaults for poloai tool settings", () => {
 		const bootstrap = buildConversationSessionBootstrap(
 			buildConversation({
 				provider: "poloai",
@@ -45,7 +44,7 @@ describe("chat-session-state.shared", () => {
 			}),
 			"user-1",
 		);
-		expect(bootstrap.outputTokens).toBe(DEFAULT_OUTPUT_TOKENS);
+		expect(bootstrap.outputTokens).toBeUndefined();
 		expect(bootstrap.enableTools).toBe(true);
 	});
 
@@ -54,7 +53,7 @@ describe("chat-session-state.shared", () => {
 			outputTokens: 999999,
 			thinkingBudget: -10,
 		});
-		expect(patch.outputTokens).toBe(200 * 1024);
+		expect(patch.outputTokens).toBeUndefined();
 		expect(patch.thinkingBudget).toBe(1024);
 	});
 

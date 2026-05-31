@@ -476,11 +476,6 @@ export function InputArea({
 								已裁剪
 							</span>
 						)}
-						{typeof visibleInsight.outputTokens === "number" && (
-							<span className="px-2 py-0.5 rounded-full border border-current/20">
-								输出预算 {(visibleInsight.outputTokens / 1024).toFixed(1).replace(/\.0$/, "")}k
-							</span>
-						)}
 						{formatMs(visibleInsight.firstTokenMs) && (
 							<span className="px-2 py-0.5 rounded-full border border-current/20">
 								首 Token {formatMs(visibleInsight.firstTokenMs)}

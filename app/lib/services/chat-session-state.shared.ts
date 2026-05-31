@@ -1,9 +1,4 @@
 import type { Conversation, LLMProvider, XAISearchMode } from "../llm/types";
-import {
-	POLO_DEFAULT_OUTPUT_TOKENS,
-	POLO_OUTPUT_TOKENS_MAX,
-	POLO_OUTPUT_TOKENS_MIN,
-} from "../llm/defaults";
 
 const VALID_PROVIDERS = new Set<LLMProvider>([
 	"deepseek",
@@ -17,8 +12,6 @@ const VALID_REASONING_EFFORT = new Set(["low", "medium", "high"]);
 const VALID_THINKING_LEVEL = new Set(["low", "medium", "high"]);
 const VALID_OUTPUT_EFFORT = new Set(["low", "medium", "high", "max"]);
 const VALID_XAI_SEARCH_MODE = new Set<XAISearchMode>(["x", "web", "both"]);
-
-export const DEFAULT_OUTPUT_TOKENS = POLO_DEFAULT_OUTPUT_TOKENS;
 
 type SessionManagedConversationFields = Pick<
 	Conversation,
@@ -78,7 +71,6 @@ function applyProviderInvariants(
 		next.xaiSearchMode = undefined;
 	}
 	if (provider === "poloai") {
-		next.outputTokens = next.outputTokens ?? DEFAULT_OUTPUT_TOKENS;
 		next.enableTools = next.enableTools ?? true;
 	}
 	if (provider && next.model) {
@@ -134,13 +126,6 @@ export function sanitizeConversationSessionPatch(
 		VALID_THINKING_LEVEL.has(patch.thinkingLevel)
 	) {
 		next.thinkingLevel = patch.thinkingLevel;
-	}
-	if (typeof patch.outputTokens === "number" && Number.isFinite(patch.outputTokens)) {
-		next.outputTokens = clampInt(
-			patch.outputTokens,
-			POLO_OUTPUT_TOKENS_MIN,
-			POLO_OUTPUT_TOKENS_MAX,
-		);
 	}
 	if (
 		typeof patch.outputEffort === "string" &&
