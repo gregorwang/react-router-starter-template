@@ -1337,7 +1337,24 @@ function evaluateMathExpression(expression: string): number {
 }
 
 const POLOAI_WEB_SEARCH_TOOL_NAME = "web_search";
-const POLOAI_WEB_SEARCH_TOOL_LEGACY_TYPE = "web_search_20250305";
+const POLOAI_WEB_SEARCH_TOOL = {
+	name: POLOAI_WEB_SEARCH_TOOL_NAME,
+	description: "Search the web for current or external information.",
+	input_schema: {
+		type: "object",
+		properties: {
+			query: {
+				type: "string",
+				description: "Search query.",
+			},
+			max_results: {
+				type: "number",
+				description: "Maximum number of results to return, from 1 to 8.",
+			},
+		},
+		required: ["query"],
+	},
+};
 
 const POLOAI_LOCAL_TOOLS = [
 	{
@@ -1413,8 +1430,7 @@ function buildPoloAITools(options: {
 	const localToolNames = new Set<string>();
 
 	if (options.webSearch) {
-		tools.push({ type: POLOAI_WEB_SEARCH_TOOL_LEGACY_TYPE, name: POLOAI_WEB_SEARCH_TOOL_NAME });
-		// Some vendors proxy Claude server tools as plain tool_use events; enable local fallback execution.
+		tools.push(POLOAI_WEB_SEARCH_TOOL);
 		localToolNames.add(POLOAI_WEB_SEARCH_TOOL_NAME);
 	}
 
