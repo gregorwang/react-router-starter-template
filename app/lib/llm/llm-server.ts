@@ -765,7 +765,7 @@ async function streamPoloAIServer(
 	const extraBody = model.startsWith("claude-opus") && !usesAdaptiveThinking
 		? { output_effort: outputEffort }
 		: undefined;
-	const formattedMessages = buildPoloAIMessages(messages);
+	const poloMessages = buildPoloAIRequestMessages(messages);
 	const localToolsEnabled = options?.enableTools ?? true;
 	const toolBundle = buildPoloAITools({ webSearch, enableTools: localToolsEnabled });
 	const toolChoice = toolBundle.tools.length > 0 ? { type: "auto" } : undefined;
@@ -773,15 +773,16 @@ async function streamPoloAIServer(
 		model,
 		stream: true,
 		max_tokens: POLO_MAX_TOKENS,
+		...(poloMessages.system ? { system: poloMessages.system } : {}),
 		...(thinkingConfig ? { thinking: thinkingConfig } : {}),
 		...(outputConfig ? { output_config: outputConfig } : {}),
 		...(extraBody ? { extra_body: extraBody } : {}),
 		...(toolBundle.tools.length > 0
 			? { tools: toolBundle.tools, tool_choice: toolChoice }
-			: {}),
+		: {}),
 	} as Record<string, unknown>;
 
-	let currentMessages = formattedMessages;
+	let currentMessages = poloMessages.messages;
 	let rounds = 0;
 	let aggregatedSearch: LLMStreamEvent["search"] | undefined;
 
@@ -1484,6 +1485,19 @@ function buildPoloAIMessages(messages: LLMMessage[]) {
 		}
 		return { role: message.role, content: blocks.length ? blocks : message.content };
 	});
+}
+
+function buildPoloAIRequestMessages(messages: LLMMessage[]) {
+	const system = messages
+		.filter((message) => message.role === "system" && message.content.trim())
+		.map((message) => message.content.trim())
+		.join("\n\n");
+	return {
+		system: system || undefined,
+		messages: buildPoloAIMessages(
+			messages.filter((message) => message.role !== "system"),
+		),
+	};
 }
 
 function decodeHtmlEntities(value: string) {
