@@ -412,7 +412,13 @@ export function useChat() {
 				const segmentMessages = currentConversation.messages
 					.concat([userMessage])
 					.slice(contextStartIndex)
-					.filter(isChatTurnMessage);
+					.filter(isChatTurnMessage)
+					.filter(
+						(msg) =>
+							msg.role !== "assistant" ||
+							msg.content.trim().length > 0 ||
+							Boolean(msg.meta?.attachments?.length),
+					);
 				const rawMessages: ChatMessage[] = segmentMessages.map((msg) => ({
 					role: msg.role,
 					content: msg.content,

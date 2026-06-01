@@ -153,21 +153,21 @@ function buildRequestMessagesV2(
 
 function prepareRecentTurns(options: BuildRequestMessagesOptions): LLMMessage[] {
 	const payloadTrimmed = options.messagesTrimmed === true;
-	let contextMessages = options.messages;
+	let contextMessages = stripEmptyAssistantMessages(options.messages);
 
 	if (options.summary && !payloadTrimmed) {
 		const summaryMessageCount = Math.min(
 			options.summaryMessageCount ?? 0,
-			options.messages.length,
+			contextMessages.length,
 		);
 		const startIndex =
 			summaryMessageCount > 0
 				? Math.max(0, summaryMessageCount - SUMMARY_CONTEXT_OVERLAP_MESSAGES)
 				: 0;
-		contextMessages = options.messages.slice(startIndex);
+		contextMessages = contextMessages.slice(startIndex);
 
-		if (contextMessages.length === 0 && options.messages.length > 0) {
-			contextMessages = options.messages.slice(
+		if (contextMessages.length === 0) {
+			contextMessages = stripEmptyAssistantMessages(options.messages).slice(
 				-Math.max(1, options.minContextMessages),
 			);
 		}
@@ -184,24 +184,24 @@ function buildRequestMessagesLegacy(
 	options: BuildRequestMessagesOptions,
 ): LLMMessage[] {
 	const payloadTrimmed = options.messagesTrimmed === true;
-	let contextMessages = options.messages;
+	let contextMessages = stripEmptyAssistantMessages(options.messages);
 	let summaryMessage: LLMMessage | null = null;
 
 	if (options.summary) {
-		let trimmed = options.messages;
+		let trimmed = contextMessages;
 		if (!payloadTrimmed) {
 			const summaryMessageCount = Math.min(
 				options.summaryMessageCount ?? 0,
-				options.messages.length,
+				contextMessages.length,
 			);
 			const startIndex =
 				summaryMessageCount > 0
 					? Math.max(0, summaryMessageCount - SUMMARY_CONTEXT_OVERLAP_MESSAGES)
 					: 0;
-			trimmed = options.messages.slice(startIndex);
+			trimmed = contextMessages.slice(startIndex);
 		}
-		if (trimmed.length === 0 && options.messages.length > 0) {
-			trimmed = options.messages.slice(-Math.max(1, options.minContextMessages));
+		if (trimmed.length === 0) {
+			trimmed = contextMessages.slice(-Math.max(1, options.minContextMessages));
 		}
 		summaryMessage = {
 			role: "system",
@@ -222,6 +222,15 @@ function buildRequestMessagesLegacy(
 	);
 
 	return summaryMessage ? [summaryMessage, ...trimmedMessages] : trimmedMessages;
+}
+
+function stripEmptyAssistantMessages(messages: LLMMessage[]) {
+	return messages.filter(
+		(message) =>
+			message.role !== "assistant" ||
+			message.content.trim().length > 0 ||
+			Boolean(message.attachments?.length),
+	);
 }
 
 function trimMessagesToBudget(
